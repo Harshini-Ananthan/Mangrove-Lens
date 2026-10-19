@@ -16,5 +16,6 @@ notebook
 fastapi[all]
 uvicorn
 pydantic
+pydantic-settings
 httpx
 apscheduler

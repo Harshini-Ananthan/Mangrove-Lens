@@ -1,4 +1,3 @@
-import ee
 import random
 import logging
 import datetime
@@ -8,7 +7,9 @@ logger = get_logger(__name__)
 
 # Try to initialize Earth Engine. If no credentials exist, we will use mock logic for demo purposes.
 EE_INITIALIZED = False
+ee = None
 try:
+    import ee
     # ee.Authenticate() # Usually required first time
     ee.Initialize()
     EE_INITIALIZED = True

@@ -18,7 +18,8 @@ Mangrove Guardian is a research-grade project focused on the monitoring and cons
 - **Geospatial Processing:** geemap, geopandas, rasterio
 - **Data Science:** pandas, numpy, matplotlib, plotly
 - **Machine Learning:** scikit-learn, joblib
-- **Web App / Dashboard:** Streamlit
+- **Backend API:** FastAPI, Uvicorn
+- **Frontend / Dashboard:** React (Vite, Leaflet, Recharts, TailwindCSS)
 - **Database:** SQLite (SQLAlchemy)
 - **AI Agent Framework:** To be implemented (CrewAI / LangGraph)
 
@@ -28,6 +29,7 @@ The project follows a scalable data science and software engineering structure:
 ```text
 MangroveGuardian/
 │
+├── frontend/          # React + Vite interactive web dashboard
 ├── data/              # Data storage (ignored in version control)
 │   ├── raw/           # Original, immutable data dumps
 │   ├── processed/     # Cleaned data used for modeling
@@ -73,9 +75,16 @@ MangroveGuardian/
    ```
 
 3. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+   - **Backend Dependencies:**
+     ```bash
+     pip install -r requirements.txt
+     ```
+   - **Frontend Dependencies:**
+     ```bash
+     cd frontend
+     npm install
+     cd ..
+     ```
 
 4. **Environment Variables:**
    Copy the example environment file and fill in your details:
@@ -83,12 +92,36 @@ MangroveGuardian/
    cp .env.example .env
    ```
 
-5. **Google Earth Engine Setup:**
-   Run the following command to authenticate your Earth Engine account:
+5. **Google Earth Engine Setup (Optional):**
+   Run the following command to authenticate your Earth Engine account (a built-in mock satellite data generator is automatically used if not authenticated):
    ```bash
    earthengine authenticate
    ```
-   Ensure you have a Google Cloud Project registered with the Earth Engine API enabled.
+
+## 🖥️ Running the Servers
+
+### 1. Start the Backend API (FastAPI)
+From the project root directory, ensure your virtual environment is activated:
+```bash
+# On Windows:
+venv\Scripts\activate
+# On macOS/Linux:
+source venv/bin/activate
+
+# Launch the FastAPI server
+python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+```
+- **Backend API:** `http://localhost:8000`
+- **Interactive API Docs (Swagger UI):** `http://localhost:8000/docs`
+- **Health Check Endpoint:** `http://localhost:8000/api/v1/health`
+
+### 2. Start the Frontend Dashboard (React + Vite)
+In a separate terminal window, start the frontend development server:
+```bash
+cd frontend
+npm run dev
+```
+- **Web Dashboard URL:** `http://localhost:5173`
 
 ## 🗺️ Future Roadmap
 - **Phase 1:** Professional Project Setup (Current)
