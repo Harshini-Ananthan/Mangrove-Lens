@@ -7,10 +7,12 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from src.database.models import MonitoringJobRecord, MonthlyFeatureRecord, RiskDecisionRecord
+from src.database.models import AlertOutboxRecord, MonitoringJobRecord, MonthlyFeatureRecord, RiskDecisionRecord
 from src.models.forecast import ForecastModel
 from src.providers.base import SatelliteProvider
 from src.services.decision import assess_risk
+from src.services.grid import resolve_region_geometry
+from src.services.notifications import configured_channels
 
 
 def load_operational_geometry(path: str) -> dict:
@@ -22,17 +24,23 @@ class MonitoringWorkflow:
     def __init__(self, provider: SatelliteProvider, model: ForecastModel, db: Session, aoi_path: str):
         self.provider, self.model, self.db, self.aoi_path = provider, model, db, aoi_path
 
-    def run(self, region_id: str, period_start: date) -> dict:
+    def run(self, region_id: str, period_start: date, job_id: str | None = None) -> dict:
         period_start = period_start.replace(day=1)
-        job = MonitoringJobRecord(
-            id=str(uuid.uuid4()), region_id=region_id, period_start=period_start,
-            status="running", provider=self.provider.name, checkpoint="acquisition",
-        )
-        self.db.add(job)
+        job = self.db.get(MonitoringJobRecord, job_id) if job_id else None
+        if job is None:
+            job = MonitoringJobRecord(
+                id=job_id or str(uuid.uuid4()), region_id=region_id, period_start=period_start,
+                status="running", provider=self.provider.name, checkpoint="acquisition",
+            )
+            self.db.add(job)
+        else:
+            job.status, job.checkpoint, job.started_at, job.error = "running", "acquisition", datetime.utcnow(), None
         self.db.commit()
         try:
             observation = self.provider.monthly_observation(
-                region_id, load_operational_geometry(self.aoi_path), period_start
+                region_id,
+                resolve_region_geometry(region_id, load_operational_geometry(self.aoi_path)),
+                period_start,
             )
             feature = self.store_observation(observation)
             job.checkpoint = "prediction"
@@ -40,6 +48,7 @@ class MonitoringWorkflow:
             prediction = self.model.predict(self._prediction_features(region_id, feature))
             decision = assess_risk(observation, prediction)
             record = self._upsert_decision(region_id, period_start, prediction, decision)
+            self._queue_alerts(record, decision)
             job.status, job.checkpoint, job.finished_at = "completed", "reported", datetime.utcnow()
             self.db.commit()
             return {
@@ -76,6 +85,34 @@ class MonitoringWorkflow:
         self.db.refresh(record)
         return record
 
+    def _queue_alerts(self, decision_record, decision):
+        if decision.severity.value < 2:
+            return
+        payload = {
+            "decision_id": decision_record.id,
+            "region_id": decision_record.region_id,
+            "period_start": decision_record.period_start.isoformat(),
+            "severity": decision.severity.label,
+            "risk_score": decision.score,
+            "evidence": decision.evidence,
+            "recommendations": decision.recommendations,
+        }
+        for channel in configured_channels():
+            existing = self.db.query(AlertOutboxRecord).filter_by(
+                decision_id=decision_record.id, channel=channel
+            ).one_or_none()
+            if existing is None:
+                if channel == "dashboard":
+                    status = "approved"
+                elif self.model.manifest.get("production_approved"):
+                    status = "pending_review"
+                else:
+                    status = "pending_validation"
+                self.db.add(AlertOutboxRecord(
+                    decision_id=decision_record.id, channel=channel, status=status, payload=payload
+                ))
+        self.db.commit()
+
     def _prediction_features(self, region_id: str, current: MonthlyFeatureRecord) -> dict[str, float]:
         history = self.db.query(MonthlyFeatureRecord).filter(
             MonthlyFeatureRecord.region_id == region_id,
@@ -89,10 +126,10 @@ class MonitoringWorkflow:
             "ndvi_lag_1": history[0].ndvi_mean,
             "ndvi_lag_12": history[11].ndvi_mean,
             "ndvi_roll_3": sorted([row.ndvi_mean for row in history[:3]])[1],
-            "co_mean": current.co_mean,
-            "ndmi_mean": current.ndmi_mean,
-            "vv_mean": current.vv_mean,
-            "vh_mean": current.vh_mean,
+            "co_lag_1": history[0].co_mean,
+            "ndmi_lag_1": history[0].ndmi_mean,
+            "vv_lag_1": history[0].vv_mean,
+            "vh_lag_1": history[0].vh_mean,
             "month": current.period_start.month,
         }
 

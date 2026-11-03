@@ -6,7 +6,7 @@ import { BottomStatusBar } from '../components/BottomStatusBar';
 
 import { Legend } from '../components/Legend';
 import { TopRightLogo } from '../components/TopRightLogo';
-import { fetchAoi, fetchHealth, fetchMonitoringDecisions, fetchMonitoringFeatures, runMonitoring } from '../api';
+import { approveAlert, dispatchAlert, fetchAlertOutbox, fetchAoi, fetchHealth, fetchMonitoringDecisions, fetchMonitoringFeatures, runMonitoring, waitForMonitoringJob } from '../api';
 
 export const Dashboard = () => {
   // State for Map
@@ -21,6 +21,7 @@ export const Dashboard = () => {
   const [aoi, setAoi] = useState(null);
   const [systemStatus, setSystemStatus] = useState(null);
   const [error, setError] = useState(null);
+  const [alerts, setAlerts] = useState([]);
   
   // State for Timeline
   const [selectedYear, setSelectedYear] = useState(2025);
@@ -31,16 +32,16 @@ export const Dashboard = () => {
     ndvi: false,
     carbon: false,
     prediction: false,
-    stations: true,
     satellite: true,
   });
 
   const refresh = async () => {
-    const [health, features, decisions, operationalAoi] = await Promise.all([
-      fetchHealth(), fetchMonitoringFeatures(), fetchMonitoringDecisions(), fetchAoi(),
+    const [health, features, decisions, operationalAoi, alertRows] = await Promise.all([
+      fetchHealth(), fetchMonitoringFeatures(), fetchMonitoringDecisions(), fetchAoi(), fetchAlertOutbox(),
     ]);
     setSystemStatus(health);
     setAoi(operationalAoi);
+    setAlerts(alertRows);
     const ordered = [...features].reverse();
     setTrendData(ordered.map(row => ({ period: row.period_start, ndvi: row.ndvi_mean })));
     if (features.length) {
@@ -88,7 +89,8 @@ export const Dashboard = () => {
     try {
       setIsAnalyzing(true);
       setError(null);
-      await runMonitoring(`${selectedYear}-06-01`);
+      const queued = await runMonitoring(`${selectedYear}-06-01`);
+      await waitForMonitoringJob(queued.job_id);
       await refresh();
     } catch (error) {
       console.error("Failed to run analysis:", error);
@@ -125,6 +127,9 @@ export const Dashboard = () => {
           trendData={trendData}
           systemStatus={systemStatus}
           error={error}
+          alerts={alerts}
+          onApproveAlert={async id => { await approveAlert(id, 'dashboard-operator'); await refresh(); }}
+          onDispatchAlert={async id => { await dispatchAlert(id); await refresh(); }}
         />
         
         {/* Main Map Area */}

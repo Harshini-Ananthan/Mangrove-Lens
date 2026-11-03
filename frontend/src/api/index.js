@@ -4,6 +4,7 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1',
   headers: {
     'Content-Type': 'application/json',
+    ...(import.meta.env.VITE_API_KEY ? { 'X-API-Key': import.meta.env.VITE_API_KEY } : {}),
   },
 });
 
@@ -37,8 +38,40 @@ export const runMonitoring = async (periodStart, regionId = 'sundarbans-transbou
   return response.data;
 };
 
+export const fetchMonitoringJobs = async (limit = 50) => {
+  const response = await api.get('/monitoring/jobs', { params: { limit } });
+  return response.data;
+};
+
+export const waitForMonitoringJob = async (jobId, timeoutMs = 180000) => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const jobs = await fetchMonitoringJobs();
+    const job = jobs.find(item => item.id === jobId);
+    if (job?.status === 'completed') return job;
+    if (job?.status === 'failed') throw new Error(job.error || 'Monitoring job failed');
+    await new Promise(resolve => setTimeout(resolve, 1500));
+  }
+  throw new Error('Monitoring job is still running; check the jobs endpoint for progress.');
+};
+
 export const fetchAoi = async () => {
   const response = await api.get('/aoi');
+  return response.data;
+};
+
+export const fetchAlertOutbox = async (limit = 50) => {
+  const response = await api.get('/alerts/outbox', { params: { limit } });
+  return response.data;
+};
+
+export const approveAlert = async (alertId, approvedBy) => {
+  const response = await api.post(`/alerts/outbox/${alertId}/approve`, { approved_by: approvedBy });
+  return response.data;
+};
+
+export const dispatchAlert = async (alertId) => {
+  const response = await api.post(`/alerts/outbox/${alertId}/dispatch`);
   return response.data;
 };
 

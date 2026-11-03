@@ -147,6 +147,18 @@ Then run `pnpm install && pnpm dev` inside `frontend/`.
 
 See [Earth Engine setup](docs/EARTH_ENGINE_SETUP.md). Set `SATELLITE_PROVIDER=earth_engine` only after `GET /api/v1/health` confirms readiness.
 
+Backfill and validate the observational dataset, then train the model:
+
+```bash
+python -m scripts.backfill_earth_engine --start 2019-01-01 --workers 4
+python -m scripts.validate_dataset
+python -m scripts.train_model
+```
+
+The API queues monitoring work at `POST /api/v1/monitoring/run`; progress is available from `GET /api/v1/monitoring/jobs`. The stable analysis grid is available from `GET /api/v1/grid`.
+
+See the [completion report](docs/COMPLETION_REPORT.md) and [operations runbook](docs/RUNBOOK.md) for verified metrics, deployment, recovery, alert approval, and external scientific gates.
+
 ### Verification
 
 ```bash

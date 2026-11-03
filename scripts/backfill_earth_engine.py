@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 
 from dateutil.relativedelta import relativedelta
@@ -19,6 +20,7 @@ def main():
     parser.add_argument("--start", default=settings.ANALYSIS_START_DATE)
     parser.add_argument("--end", default=date.today().replace(day=1).isoformat())
     parser.add_argument("--region-id", default="sundarbans-transboundary-v1")
+    parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args()
     provider = EarthEngineProvider()
     ready, detail = provider.readiness()
@@ -29,17 +31,29 @@ def main():
     try:
         cursor, end = date.fromisoformat(args.start).replace(day=1), date.fromisoformat(args.end).replace(day=1)
         workflow = MonitoringWorkflow(provider, ForecastModel(), db, settings.AOI_PATH)
+        periods = []
         while cursor < end:
             exists = db.query(MonthlyFeatureRecord).filter_by(
                 region_id=args.region_id, period_start=cursor, provider=provider.name
             ).one_or_none()
             if exists is None:
-                observation = provider.monthly_observation(args.region_id, geometry, cursor)
-                workflow.store_observation(observation)
-                print(f"Stored {cursor}: {observation.quality.status}")
+                periods.append(cursor)
             else:
                 print(f"Skipped existing {cursor}")
             cursor += relativedelta(months=1)
+        with ThreadPoolExecutor(max_workers=max(1, min(args.workers, 6))) as executor:
+            futures = {
+                executor.submit(provider.monthly_observation, args.region_id, geometry, period): period
+                for period in periods
+            }
+            for future in as_completed(futures):
+                period = futures[future]
+                try:
+                    observation = future.result()
+                    workflow.store_observation(observation)
+                    print(f"Stored {period}: {observation.quality.status}")
+                except Exception as exc:
+                    print(f"Failed {period}: {exc}")
     finally:
         db.close()
 

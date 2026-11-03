@@ -39,6 +39,16 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: str = "http://localhost:5173"
     ENABLE_SCHEDULER: bool = False
+    ENABLE_EXTERNAL_NOTIFICATIONS: bool = False
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    ALERT_EMAIL_TO: str = ""
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_CHAT_ID: str = ""
+    REQUIRE_ALERT_APPROVAL: bool = True
+    API_KEY: str = ""
 
     @property
     def cors_origins(self) -> list[str]:

@@ -1,17 +1,24 @@
 services:
   api:
     build: .
-    env_file: .env
+    env_file: ${ENV_FILE:-.env.example}
+    environment:
+      DATABASE_URL: postgresql+psycopg://mangrove:${POSTGRES_PASSWORD:-mangrove}@db:5432/mangrove_lens
     volumes:
       - ./data:/app/data
       - ./models:/app/models:ro
     ports:
       - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
 
   scheduler:
     build: .
     command: ["python", "-m", "scripts.run_scheduler"]
-    env_file: .env
+    env_file: ${ENV_FILE:-.env.example}
+    environment:
+      DATABASE_URL: postgresql+psycopg://mangrove:${POSTGRES_PASSWORD:-mangrove}@db:5432/mangrove_lens
     volumes:
       - ./data:/app/data
       - ./models:/app/models:ro
@@ -25,3 +32,20 @@ services:
     ports:
       - "5173:80"
     depends_on: [api]
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: mangrove_lens
+      POSTGRES_USER: mangrove
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mangrove}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mangrove -d mangrove_lens"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

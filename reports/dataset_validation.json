@@ -1,0 +1,21 @@
+{
+  "status": "passed",
+  "rows": 94,
+  "regions": 1,
+  "period_start": "2019-01-01",
+  "period_end": "2026-10-01",
+  "duplicate_count": 0,
+  "missing_periods": [],
+  "quality_status_counts": {
+    "valid": 90,
+    "low_coverage": 4
+  },
+  "mean_valid_pixel_fraction": 0.8622307431020383,
+  "null_counts": {
+    "ndvi_mean": 0,
+    "ndmi_mean": 0,
+    "vv_mean": 0,
+    "vh_mean": 0,
+    "co_mean": 0
+  }
+}

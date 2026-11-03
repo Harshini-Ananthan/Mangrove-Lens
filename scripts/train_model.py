@@ -39,12 +39,22 @@ def main():
     model.fit(train[FEATURES], train["target_ndvi"])
     predictions = model.predict(test[FEATURES])
     persistence = test["ndvi_lag_1"]
+    evaluation = test[["period_start", "target_ndvi"]].copy()
+    evaluation["prediction"] = predictions
+    evaluation["absolute_error"] = (evaluation["target_ndvi"] - evaluation["prediction"]).abs()
+    evaluation["month"] = pd.to_datetime(evaluation["period_start"]).dt.month
+    evaluation["season"] = evaluation["month"].map(
+        lambda month: "monsoon" if month in {6, 7, 8, 9} else "post_monsoon" if month in {10, 11} else "dry_pre_monsoon"
+    )
+    seasonal_mae = evaluation.groupby("season")["absolute_error"].mean().to_dict()
     metrics = {
         "mae": mean_absolute_error(test["target_ndvi"], predictions),
         "rmse": mean_squared_error(test["target_ndvi"], predictions) ** 0.5,
         "r2": r2_score(test["target_ndvi"], predictions),
         "persistence_mae": mean_absolute_error(test["target_ndvi"], persistence),
         "train_rows": len(train), "test_rows": len(test), "cutoff": cutoff.date().isoformat(),
+        "seasonal_mae": seasonal_mae,
+        "mean_bias": float((predictions - test["target_ndvi"]).mean()),
     }
     if metrics["mae"] >= metrics["persistence_mae"]:
         raise SystemExit(f"Model rejected: MAE {metrics['mae']:.4f} does not beat persistence {metrics['persistence_mae']:.4f}")
@@ -56,10 +66,19 @@ def main():
     version = f"rf-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{hashlib.sha256(artifact.read_bytes()).hexdigest()[:8]}"
     manifest = {
         "model_version": version, "features": FEATURES, "metrics": metrics,
-        "trained_at": datetime.now(timezone.utc).isoformat(), "target": "next_month_ndvi",
+        "trained_at": datetime.now(timezone.utc).isoformat(), "target": "current_month_ndvi_from_prior_observations",
         "validation": "last 12 complete observations held out", "random_seed": 42,
         "dataset_kind": "synthetic_demo" if set(frame["provider"]) == {"demo"} else "observational",
         "production_approved": False,
+        "observational_gate_passed": set(frame["provider"]) == {"earth_engine"},
+        "data_period": {
+            "start": str(pd.to_datetime(frame["period_start"]).min().date()),
+            "end": str(pd.to_datetime(frame["period_start"]).max().date()),
+        },
+        "feature_importance": dict(sorted(
+            zip(FEATURES, [float(value) for value in model.feature_importances_]),
+            key=lambda item: item[1], reverse=True,
+        )),
     }
     (models / "ndvi_forecast_rf.manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     (reports / "model_evaluation.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")

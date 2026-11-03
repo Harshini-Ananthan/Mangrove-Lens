@@ -4,6 +4,7 @@ numpy
 scikit-learn
 joblib
 sqlalchemy
+psycopg[binary]
 python-dotenv
 fastapi[all]
 uvicorn
@@ -11,5 +12,5 @@ pydantic
 pydantic-settings
 apscheduler
 python-dateutil
-pytest
+pytest>=8,<9
 pytest-cov
