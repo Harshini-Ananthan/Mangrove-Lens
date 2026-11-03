@@ -1,8 +1,7 @@
 import React from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { trendData } from '../data/mockData';
+import { AreaChart, Area, Tooltip, ResponsiveContainer } from 'recharts';
 
-export const TrendChart = () => {
+export const TrendChart = ({ data = [] }) => {
   return (
     <div className="bg-white p-4 rounded-[20px] shadow-sm border border-gray-100 flex flex-col gap-2">
       <div className="flex justify-between items-end">
@@ -14,7 +13,7 @@ export const TrendChart = () => {
       </div>
       <div className="h-24 w-full mt-2">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={trendData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="colorNdvi" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#22C55E" stopOpacity={0.3}/>

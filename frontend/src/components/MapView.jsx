@@ -29,7 +29,7 @@ const PolygonDrawer = ({ isDrawing, onPolygonComplete }) => {
       // Auto-complete if they have at least 3 points and double click or something.
       // We will just let them click a 'Finish' button outside instead.
     },
-    contextmenu(e) {
+    contextmenu() {
       if (!isDrawing) return;
       // Right click to finish
       if (points.length >= 3) {
@@ -43,7 +43,7 @@ const PolygonDrawer = ({ isDrawing, onPolygonComplete }) => {
   return <Polygon positions={points} pathOptions={{ color: 'blue' }} />;
 };
 
-export const MapView = ({ center, zoom, selectedYear, layers, setCenter, setZoom, onPolygonDrawn, isDrawingMode, setIsDrawingMode }) => {
+export const MapView = ({ center, zoom, layers, setCenter, setZoom, onPolygonDrawn, isDrawingMode, setIsDrawingMode, aoiGeoJSON }) => {
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -120,7 +120,7 @@ export const MapView = ({ center, zoom, selectedYear, layers, setCenter, setZoom
         {(layers.mangrove_extent || layers.ndvi) && (
           <GeoJSON 
             key={`sundarbans-${layers.ndvi ? 'ndvi' : 'extent'}`} 
-            data={sundarbansGeoJSON} 
+            data={aoiGeoJSON || sundarbansGeoJSON}
             style={geoJsonStyle} 
           />
         )}

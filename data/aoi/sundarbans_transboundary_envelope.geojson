@@ -1,0 +1,23 @@
+{
+  "type": "FeatureCollection",
+  "name": "sundarbans_transboundary_operational_envelope_v1",
+  "metadata": {
+    "version": "1.0.0",
+    "purpose": "Operational envelope for India-Bangladesh Sundarbans monitoring",
+    "warning": "This is a conservative analysis envelope, not an administrative or protected-area boundary. Analysis must be masked to validated mangrove extent before scientific reporting.",
+    "crs": "EPSG:4326"
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "sundarbans-transboundary-v1",
+        "label": "Sundarbans transboundary operational envelope"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[87.95, 21.45], [90.05, 21.45], [90.05, 22.75], [87.95, 22.75], [87.95, 21.45]]]
+      }
+    }
+  ]
+}

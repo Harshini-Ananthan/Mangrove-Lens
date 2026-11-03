@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api/v1',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -22,17 +22,23 @@ export const fetchHistory = async (limit = 100) => {
   return response.data;
 };
 
-export const runAnalysis = async (regionId, polygon, targetDate = null) => {
-  const payload = {
-    region_id: regionId,
-    polygon: polygon,
-  };
-  
-  if (targetDate) {
-    payload.target_date = targetDate;
-  }
-  
-  const response = await api.post('/analyze', payload);
+export const fetchMonitoringFeatures = async (regionId = 'sundarbans-transboundary-v1', limit = 120) => {
+  const response = await api.get('/monitoring/features', { params: { region_id: regionId, limit } });
+  return response.data;
+};
+
+export const fetchMonitoringDecisions = async (regionId = 'sundarbans-transboundary-v1', limit = 20) => {
+  const response = await api.get('/monitoring/decisions', { params: { region_id: regionId, limit } });
+  return response.data;
+};
+
+export const runMonitoring = async (periodStart, regionId = 'sundarbans-transboundary-v1') => {
+  const response = await api.post('/monitoring/run', { region_id: regionId, period_start: periodStart });
+  return response.data;
+};
+
+export const fetchAoi = async () => {
+  const response = await api.get('/aoi');
   return response.data;
 };
 

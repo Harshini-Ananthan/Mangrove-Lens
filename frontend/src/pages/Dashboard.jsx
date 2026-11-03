@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { Navbar } from '../components/Navbar';
+import React, { useEffect, useState } from 'react';
 import { Sidebar } from '../components/Sidebar';
 import { MapView } from '../components/MapView';
 import { FloatingControls } from '../components/FloatingControls';
@@ -7,7 +6,7 @@ import { BottomStatusBar } from '../components/BottomStatusBar';
 
 import { Legend } from '../components/Legend';
 import { TopRightLogo } from '../components/TopRightLogo';
-import { runAnalysis } from '../api';
+import { fetchAoi, fetchHealth, fetchMonitoringDecisions, fetchMonitoringFeatures, runMonitoring } from '../api';
 
 export const Dashboard = () => {
   // State for Map
@@ -18,6 +17,10 @@ export const Dashboard = () => {
   const [analysisData, setAnalysisData] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [trendData, setTrendData] = useState([]);
+  const [aoi, setAoi] = useState(null);
+  const [systemStatus, setSystemStatus] = useState(null);
+  const [error, setError] = useState(null);
   
   // State for Timeline
   const [selectedYear, setSelectedYear] = useState(2025);
@@ -31,6 +34,31 @@ export const Dashboard = () => {
     stations: true,
     satellite: true,
   });
+
+  const refresh = async () => {
+    const [health, features, decisions, operationalAoi] = await Promise.all([
+      fetchHealth(), fetchMonitoringFeatures(), fetchMonitoringDecisions(), fetchAoi(),
+    ]);
+    setSystemStatus(health);
+    setAoi(operationalAoi);
+    const ordered = [...features].reverse();
+    setTrendData(ordered.map(row => ({ period: row.period_start, ndvi: row.ndvi_mean })));
+    if (features.length) {
+      const latest = features[0];
+      const decision = decisions[0];
+      setAnalysisData({
+        ndvi_actual: latest.ndvi_mean,
+        ndvi_predicted: decision?.expected_ndvi ?? latest.ndvi_mean,
+        co_level: latest.co_mean,
+        health_score: decision ? 100 - decision.risk_score : 100,
+        severity: decision?.severity ?? 'low',
+      });
+    }
+  };
+
+  useEffect(() => {
+    refresh().catch(err => setError(err.response?.data?.detail || err.message));
+  }, []);
 
   const toggleLayer = (layerId) => {
     setLayers(prev => ({
@@ -56,21 +84,15 @@ export const Dashboard = () => {
     }
   };
 
-  const handlePolygonDrawn = async (geoJsonData) => {
+  const handlePolygonDrawn = async () => {
     try {
       setIsAnalyzing(true);
-      // Run the full Phase 2 Pipeline
-      const result = await runAnalysis("custom_region", geoJsonData, `${selectedYear}-06-01T00:00:00Z`);
-      setAnalysisData(result.results);
-      console.log("Analysis Result:", result);
-      
-      // If there's an alert triggered, we could show a toast or a modal here
-      if (result.results.alert_triggered) {
-        alert(`🚨 ALERT TRIGGERED: Mangrove Health is ${result.results.health_status}. Please check the alerts panel for details.`);
-      }
+      setError(null);
+      await runMonitoring(`${selectedYear}-06-01`);
+      await refresh();
     } catch (error) {
       console.error("Failed to run analysis:", error);
-      alert("Failed to run analysis. Check console for details.");
+      setError(error.response?.data?.detail || error.message);
     } finally {
       setIsAnalyzing(false);
     }
@@ -100,6 +122,9 @@ export const Dashboard = () => {
           toggleLayer={toggleLayer}
           analysisData={analysisData}
           isAnalyzing={isAnalyzing}
+          trendData={trendData}
+          systemStatus={systemStatus}
+          error={error}
         />
         
         {/* Main Map Area */}
@@ -116,6 +141,7 @@ export const Dashboard = () => {
             onPolygonDrawn={handlePolygonDrawn}
             isDrawingMode={isDrawingMode}
             setIsDrawingMode={setIsDrawingMode}
+            aoiGeoJSON={aoi}
           />
 
           <Legend layers={layers} />

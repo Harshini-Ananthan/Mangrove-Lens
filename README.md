@@ -9,8 +9,8 @@ Mangrove Guardian is a research-grade project focused on the monitoring and cons
 - **Monitor** mangrove health and coverage over time using high-resolution satellite imagery.
 - **Analyze** environmental factors such as atmospheric conditions using Sentinel-5P data.
 - **Predict** potential threats or degradation using Machine Learning (Random Forest).
-- **Automate** decision-making and insights generation via an AI Agent framework (CrewAI/LangGraph).
-- **Visualize** the findings interactively using a Streamlit dashboard.
+- **Automate** decision-making through an auditable deterministic agent workflow.
+- **Visualize** observations, forecasts, evidence, and risk in the React map dashboard.
 
 ## 🛠️ Technology Stack
 - **Data Source:** Google Earth Engine (Sentinel-2, Sentinel-5P)
@@ -21,7 +21,7 @@ Mangrove Guardian is a research-grade project focused on the monitoring and cons
 - **Backend API:** FastAPI, Uvicorn
 - **Frontend / Dashboard:** React (Vite, Leaflet, Recharts, TailwindCSS)
 - **Database:** SQLite (SQLAlchemy)
-- **AI Agent Framework:** To be implemented (CrewAI / LangGraph)
+- **AI Agent Framework:** Deterministic observe-analyze-decide-report orchestration
 
 ## 📁 Folder Structure
 The project follows a scalable data science and software engineering structure:
@@ -42,7 +42,7 @@ MangroveGuardian/
 │   ├── features/      # Scripts to turn raw data into features for modeling
 │   ├── models/        # Machine learning logic (training, inference)
 │   ├── agents/        # AI decision agent logic
-│   ├── dashboard/     # Streamlit app code
+│   ├── providers/     # Demo and Google Earth Engine source adapters
 │   ├── utils/         # Helper functions
 │
 ├── reports/           # Generated analysis as HTML, PDF, LaTeX, etc.
@@ -93,7 +93,7 @@ MangroveGuardian/
    ```
 
 5. **Google Earth Engine Setup (Optional):**
-   Run the following command to authenticate your Earth Engine account (a built-in mock satellite data generator is automatically used if not authenticated):
+   Run the following command to authenticate your Earth Engine account. Live mode fails explicitly if credentials are unavailable; deterministic demo mode must be selected with `SATELLITE_PROVIDER=demo`:
    ```bash
    earthengine authenticate
    ```
@@ -123,14 +123,41 @@ npm run dev
 ```
 - **Web Dashboard URL:** `http://localhost:5173`
 
-## 🗺️ Future Roadmap
-- **Phase 1:** Professional Project Setup (Current)
-- **Phase 2:** Data Collection via Google Earth Engine (Sentinel-2, Sentinel-5P)
-- **Phase 3:** Exploratory Data Analysis & Preprocessing
-- **Phase 4:** Machine Learning Model Development (Random Forest)
-- **Phase 5:** Dashboard Integration (Streamlit)
-- **Phase 6:** AI Decision Agent Implementation (CrewAI/LangGraph)
-- **Phase 7:** Alerts & Reporting Modules
+## Verified monitoring workflow
+
+The implemented workflow is deliberately deterministic and auditable:
+
+1. Sentinel-2, Sentinel-1, Sentinel-5P OFFL CO, and the CGMD mangrove extent are queried through Earth Engine.
+2. Pixel quality, source counts, collection IDs, and model/rule versions are stored with every period.
+3. A Random Forest forecasts expected NDVI from leakage-safe lagged features; a declared seasonal persistence baseline is used until a trained artifact is installed.
+4. The decision engine combines forecast residual, anomaly score, moisture, SAR, CO context, and data quality. CO is never presented as causal evidence.
+5. High and critical decisions require human review.
+
+### Run the offline demonstration
+
+```bash
+python -m scripts.bootstrap_demo
+python -m scripts.train_model
+python -m uvicorn src.main:app --reload
+```
+
+Then run `pnpm install && pnpm dev` inside `frontend/`.
+
+### Live Earth Engine mode
+
+See [Earth Engine setup](docs/EARTH_ENGINE_SETUP.md). Set `SATELLITE_PROVIDER=earth_engine` only after `GET /api/v1/health` confirms readiness.
+
+### Verification
+
+```bash
+python -m pytest -q
+python -m compileall -q src scripts
+cd frontend
+pnpm lint
+pnpm build
+```
+
+The complete scientific, engineering, and deployment roadmap is in [the implementation plan](docs/IMPLEMENTATION_PLAN.md).
 
 ---
 *Developed for the conservation of the Sundarbans Mangrove Forest.*
