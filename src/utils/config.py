@@ -1,10 +1,15 @@
-import os
-from pydantic_settings import BaseSettings
+from functools import lru_cache
+from typing import Literal
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
     # App Config
     APP_NAME: str = "Mangrove Health API"
-    ENVIRONMENT: str = "development"
+    ENVIRONMENT: Literal["development", "test", "production"] = "development"
+    SATELLITE_PROVIDER: Literal["demo", "earth_engine"] = "demo"
     
     # Database
     DATABASE_URL: str = "sqlite:///data/mangrove_guardian.db"
@@ -19,7 +24,10 @@ class Settings(BaseSettings):
     
     # Satellite Integration (Earth Engine)
     # E.g., paths to service account keys if needed
-    EE_PROJECT_ID: str = ""
+    EE_PROJECT_ID: str = "nex-sync"
+    AOI_PATH: str = "data/aoi/sundarbans_transboundary_envelope.geojson"
+    ANALYSIS_START_DATE: str = "2019-01-01"
+    MIN_VALID_PIXEL_FRACTION: float = 0.30
     
     # Notifications
     ENABLE_EMAIL_NOTIFICATIONS: bool = False
@@ -29,8 +37,17 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     NOTIFICATION_EMAIL: str = ""
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    CORS_ORIGINS: str = "http://localhost:5173"
+    ENABLE_SCHEDULER: bool = False
 
-settings = Settings()
+    @property
+    def cors_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()

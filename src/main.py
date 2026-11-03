@@ -17,7 +17,7 @@ app = FastAPI(title=settings.APP_NAME, description="AI-powered Mangrove Health M
 # Configure CORS for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, restrict this to the frontend URL
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -27,7 +27,7 @@ app.include_router(router, prefix="/api/v1")
 
 @app.on_event("startup")
 async def startup_event():
-    logger.info(f"Starting {settings.APP_NAME}...")
+    logger.info("Starting %s with satellite provider %s", settings.APP_NAME, settings.SATELLITE_PROVIDER)
 
 if __name__ == "__main__":
     uvicorn.run("src.main:app", host="0.0.0.0", port=8000, reload=True)

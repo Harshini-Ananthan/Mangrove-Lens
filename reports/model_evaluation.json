@@ -1,0 +1,28 @@
+{
+  "model_version": "rf-20261103115007-febb8a11",
+  "features": [
+    "ndvi_lag_1",
+    "ndvi_lag_12",
+    "ndvi_roll_3",
+    "co_mean",
+    "ndmi_mean",
+    "vv_mean",
+    "vh_mean",
+    "month"
+  ],
+  "metrics": {
+    "mae": 0.031092259612332234,
+    "rmse": 0.039063939547437664,
+    "r2": 0.6933115341359823,
+    "persistence_mae": 0.06074461538461539,
+    "train_rows": 68,
+    "test_rows": 13,
+    "cutoff": "2025-09-01"
+  },
+  "trained_at": "2026-11-03T11:50:07.891706+00:00",
+  "target": "next_month_ndvi",
+  "validation": "last 12 complete observations held out",
+  "random_seed": 42,
+  "dataset_kind": "synthetic_demo",
+  "production_approved": false
+}

@@ -1,0 +1,35 @@
+{
+  "status": "passed",
+  "executed_at": "2026-11-03T11:56:11Z",
+  "earth_engine_project": "nex-sync",
+  "region_id": "sundarbans-transboundary-v1",
+  "period_start": "2026-01-01",
+  "period_end": "2026-02-01",
+  "sources": [
+    "COPERNICUS/S2_SR_HARMONIZED",
+    "COPERNICUS/S1_GRD",
+    "COPERNICUS/S5P/OFFL/L3_CO",
+    "projects/mangrovedatahub2/assets/CGMD-Extent30"
+  ],
+  "observation": {
+    "ndvi_mean": 0.6633039093437608,
+    "ndvi_p10": 0.5273568317753627,
+    "ndvi_p90": 0.8007025135332757,
+    "ndmi_mean": 0.4259848643128142,
+    "vv_mean": -8.96708943709335,
+    "vh_mean": -15.018511364117796,
+    "co_mean": 0.04610205635238606
+  },
+  "quality": {
+    "valid_pixel_fraction": 1.0,
+    "optical_image_count": 126,
+    "sar_image_count": 25,
+    "co_image_count": 440,
+    "status": "valid"
+  },
+  "notes": [
+    "Statistics were aggregated at 100 m over the 2023 CGMD mangrove extent within the transboundary envelope.",
+    "CO is coarse atmospheric context and is not interpreted as causal evidence of mangrove degradation.",
+    "This smoke test verifies authenticated source access and calculations; it is not a model validation result."
+  ]
+}

@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, JSON
+from sqlalchemy import Boolean, Column, Date, Integer, String, Float, DateTime, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from src.database.db import Base
 
@@ -45,3 +45,60 @@ class AlertRecord(Base):
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
     
     analysis = relationship("AnalysisRecord", back_populates="alerts")
+
+
+class MonthlyFeatureRecord(Base):
+    __tablename__ = "monthly_features"
+    __table_args__ = (UniqueConstraint("region_id", "period_start", "provider", name="uq_feature_period_provider"),)
+
+    id = Column(Integer, primary_key=True)
+    region_id = Column(String, nullable=False, index=True)
+    period_start = Column(Date, nullable=False, index=True)
+    period_end = Column(Date, nullable=False)
+    provider = Column(String, nullable=False)
+    ndvi_mean = Column(Float)
+    ndvi_p10 = Column(Float)
+    ndvi_p90 = Column(Float)
+    ndmi_mean = Column(Float)
+    vv_mean = Column(Float)
+    vh_mean = Column(Float)
+    co_mean = Column(Float)
+    valid_pixel_fraction = Column(Float, nullable=False)
+    quality_status = Column(String, nullable=False)
+    quality = Column(JSON, nullable=False)
+    provenance = Column(JSON, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
+
+
+class MonitoringJobRecord(Base):
+    __tablename__ = "monitoring_jobs"
+
+    id = Column(String, primary_key=True)
+    region_id = Column(String, nullable=False, index=True)
+    period_start = Column(Date, nullable=False)
+    status = Column(String, nullable=False, index=True)
+    provider = Column(String, nullable=False)
+    checkpoint = Column(String, nullable=False, default="created")
+    error = Column(String)
+    started_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    finished_at = Column(DateTime)
+
+
+class RiskDecisionRecord(Base):
+    __tablename__ = "risk_decisions"
+    __table_args__ = (UniqueConstraint("region_id", "period_start", "rule_version", name="uq_decision_period_rule"),)
+
+    id = Column(Integer, primary_key=True)
+    region_id = Column(String, nullable=False, index=True)
+    period_start = Column(Date, nullable=False, index=True)
+    severity = Column(String, nullable=False, index=True)
+    risk_score = Column(Float, nullable=False)
+    model_version = Column(String, nullable=False)
+    expected_ndvi = Column(Float)
+    anomaly_score = Column(Float)
+    rule_version = Column(String, nullable=False)
+    evidence = Column(JSON, nullable=False)
+    recommendations = Column(JSON, nullable=False)
+    requires_human_review = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)

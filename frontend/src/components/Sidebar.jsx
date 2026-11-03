@@ -15,7 +15,10 @@ export const Sidebar = ({
   layers,
   toggleLayer,
   analysisData,
-  isAnalyzing
+  isAnalyzing,
+  trendData,
+  systemStatus,
+  error
 }) => {
   return (
     <motion.aside 
@@ -48,6 +51,13 @@ export const Sidebar = ({
       </div>
 
       <div className="px-5 pb-5 pt-2 flex-1 flex flex-col gap-5">
+        {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
+        {systemStatus && (
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-[11px] text-gray-600">
+            <strong className="text-primary">{systemStatus.satellite.provider}</strong> · {systemStatus.satellite.detail}
+            {!systemStatus.model.ready && <div className="mt-1 text-amber-700">Using the declared seasonal baseline until a trained model is installed.</div>}
+          </div>
+        )}
         {/* Search */}
         <SearchBox />
 
@@ -71,7 +81,7 @@ export const Sidebar = ({
         </div>
 
         {/* Trend Chart */}
-        <TrendChart />
+        <TrendChart data={trendData} />
 
         {/* Layer Controls Accordion */}
         <LayerPanel layers={layers} toggleLayer={toggleLayer} />
