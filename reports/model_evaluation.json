@@ -1,28 +1,49 @@
 {
-  "model_version": "rf-20261103115007-febb8a11",
+  "model_version": "rf-20261103124059-3ebfaf48",
   "features": [
     "ndvi_lag_1",
     "ndvi_lag_12",
     "ndvi_roll_3",
-    "co_mean",
-    "ndmi_mean",
-    "vv_mean",
-    "vh_mean",
+    "co_lag_1",
+    "ndmi_lag_1",
+    "vv_lag_1",
+    "vh_lag_1",
     "month"
   ],
   "metrics": {
-    "mae": 0.031092259612332234,
-    "rmse": 0.039063939547437664,
-    "r2": 0.6933115341359823,
-    "persistence_mae": 0.06074461538461539,
-    "train_rows": 68,
-    "test_rows": 13,
-    "cutoff": "2025-09-01"
+    "mae": 0.03055048372389524,
+    "rmse": 0.041223887619623624,
+    "r2": 0.48883814594723196,
+    "persistence_mae": 0.04841413500411978,
+    "train_rows": 66,
+    "test_rows": 12,
+    "cutoff": "2025-10-01",
+    "seasonal_mae": {
+      "dry_pre_monsoon": 0.03732751179237328,
+      "monsoon": 0.032969448935976677,
+      "post_monsoon": 0.014577462374857722
+    },
+    "mean_bias": -0.004098970386983869
   },
-  "trained_at": "2026-11-03T11:50:07.891706+00:00",
-  "target": "next_month_ndvi",
+  "trained_at": "2026-11-03T12:40:59.531215+00:00",
+  "target": "current_month_ndvi_from_prior_observations",
   "validation": "last 12 complete observations held out",
   "random_seed": 42,
-  "dataset_kind": "synthetic_demo",
-  "production_approved": false
+  "dataset_kind": "observational",
+  "production_approved": false,
+  "observational_gate_passed": true,
+  "data_period": {
+    "start": "2019-01-01",
+    "end": "2026-10-01"
+  },
+  "feature_importance": {
+    "ndmi_lag_1": 0.6600478457170749,
+    "vv_lag_1": 0.07406598675804077,
+    "ndvi_lag_1": 0.062416957893010834,
+    "vh_lag_1": 0.0560627853631432,
+    "ndvi_lag_12": 0.043703961766664204,
+    "co_lag_1": 0.04183954773743102,
+    "month": 0.03418374476232965,
+    "ndvi_roll_3": 0.027679170002305617
+  }
 }

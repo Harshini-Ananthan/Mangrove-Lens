@@ -1,0 +1,37 @@
+{
+  "status": "passed",
+  "period": "2026-10-01",
+  "earth_engine_project": "nex-sync",
+  "provider": "earth_engine",
+  "model_version": "rf-20261103124059-3ebfaf48",
+  "observation": {
+    "ndvi_actual": 0.6934509982311988,
+    "ndvi_expected": 0.6895662663706038,
+    "residual": 0.0038847318605950143,
+    "anomaly_score": 0.12949106201983382,
+    "uncertainty": 0.029478924327534992,
+    "valid_pixel_fraction": 0.999421561605961,
+    "optical_image_count": 121,
+    "sar_image_count": 22,
+    "co_image_count": 435
+  },
+  "decision": {
+    "severity": "low",
+    "risk_score": 10.0,
+    "requires_human_review": false,
+    "evidence": [
+      "CO is elevated and is treated as contextual, non-causal evidence."
+    ],
+    "recommendations": [
+      "Continue routine monitoring."
+    ]
+  },
+  "checks": [
+    "Authenticated Earth Engine acquisition completed",
+    "Independent mangrove extent mask applied",
+    "Quality and provenance stored",
+    "Prior-observation feature cutoff enforced",
+    "Observational Random Forest inference completed",
+    "Decision and audit record stored"
+  ]
+}

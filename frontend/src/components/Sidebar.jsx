@@ -7,7 +7,7 @@ import { TimelineSlider } from './TimelineSlider';
 import { LayerPanel } from './LayerPanel';
 import { PredictionCard } from './PredictionCard';
 import { TrendChart } from './TrendChart';
-import { statsData } from '../data/mockData';
+import { AlertPanel } from './AlertPanel';
 
 export const Sidebar = ({ 
   selectedYear, 
@@ -18,7 +18,10 @@ export const Sidebar = ({
   isAnalyzing,
   trendData,
   systemStatus,
-  error
+  error,
+  alerts,
+  onApproveAlert,
+  onDispatchAlert
 }) => {
   return (
     <motion.aside 
@@ -74,10 +77,10 @@ export const Sidebar = ({
               <span className="text-xs text-primary font-medium">Analyzing Region...</span>
             </div>
           )}
-          <StatsCard title="Actual NDVI" value={analysisData ? analysisData.ndvi_actual.toFixed(3) : statsData.ndvi} />
-          <StatsCard title="Predicted NDVI" value={analysisData ? analysisData.ndvi_predicted.toFixed(3) : "0.74"} />
-          <StatsCard title="Carbon (CO)" value={analysisData ? analysisData.co_level.toFixed(4) : statsData.carbonEmissions} />
-          <StatsCard title="Health Score" value={analysisData ? `${analysisData.health_score.toFixed(0)}/100` : statsData.predictionScore} />
+          <StatsCard title="Actual NDVI" value={analysisData ? analysisData.ndvi_actual.toFixed(3) : '—'} />
+          <StatsCard title="Expected NDVI" value={analysisData ? analysisData.ndvi_predicted.toFixed(3) : '—'} />
+          <StatsCard title="Carbon (CO)" value={analysisData ? analysisData.co_level.toFixed(4) : '—'} />
+          <StatsCard title="Health Score" value={analysisData ? `${analysisData.health_score.toFixed(0)}/100` : '—'} />
         </div>
 
         {/* Trend Chart */}
@@ -87,7 +90,9 @@ export const Sidebar = ({
         <LayerPanel layers={layers} toggleLayer={toggleLayer} />
 
         {/* AI Prediction */}
-        <PredictionCard score={statsData.predictionScore} />
+        <PredictionCard riskScore={analysisData ? 100 - analysisData.health_score : 0} />
+
+        <AlertPanel alerts={alerts} onApprove={onApproveAlert} onDispatch={onDispatchAlert} />
       </div>
 
       {/* Footer / Download Button */}

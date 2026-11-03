@@ -1,9 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-export const PredictionCard = ({ score }) => {
-  // Extract number from score string, e.g., "92%" -> 92
-  const percentage = parseInt(score.replace('%', ''));
+export const PredictionCard = ({ riskScore = 0 }) => {
+  const percentage = Math.max(0, Math.min(100, Number(riskScore) || 0));
   const circumference = 2 * Math.PI * 24; // r=24
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
@@ -14,8 +13,8 @@ export const PredictionCard = ({ score }) => {
       
       <div className="relative z-10 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold opacity-90 mb-1">Projected Change</h3>
-          <p className="text-xs opacity-75">AI Confidence Score</p>
+          <h3 className="text-sm font-semibold opacity-90 mb-1">Decision Risk</h3>
+          <p className="text-xs opacity-75">Explainable rule score</p>
         </div>
         
         {/* Circular Progress */}
@@ -45,7 +44,7 @@ export const PredictionCard = ({ score }) => {
               transition={{ duration: 1.5, ease: "easeOut" }}
             />
           </svg>
-          <span className="absolute text-sm font-bold">{score}</span>
+          <span className="absolute text-sm font-bold">{percentage.toFixed(0)}%</span>
         </div>
       </div>
     </div>

@@ -72,6 +72,8 @@ data/external/*
 !data/external/.gitkeep
 models/*
 !models/.gitkeep
+!models/ndvi_forecast_rf.joblib
+!models/ndvi_forecast_rf.manifest.json
 logs/*
 !logs/.gitkeep
 

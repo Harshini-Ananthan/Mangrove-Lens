@@ -83,6 +83,7 @@ class MonitoringJobRecord(Base):
     error = Column(String)
     started_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
     finished_at = Column(DateTime)
+    requested_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
 
 
 class RiskDecisionRecord(Base):
@@ -101,4 +102,21 @@ class RiskDecisionRecord(Base):
     evidence = Column(JSON, nullable=False)
     recommendations = Column(JSON, nullable=False)
     requires_human_review = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+
+class AlertOutboxRecord(Base):
+    __tablename__ = "alert_outbox"
+    __table_args__ = (UniqueConstraint("decision_id", "channel", name="uq_alert_decision_channel"),)
+
+    id = Column(Integer, primary_key=True)
+    decision_id = Column(Integer, ForeignKey("risk_decisions.id"), nullable=False, index=True)
+    channel = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="pending_review", index=True)
+    payload = Column(JSON, nullable=False)
+    attempts = Column(Integer, nullable=False, default=0)
+    approved_by = Column(String)
+    approved_at = Column(DateTime)
+    sent_at = Column(DateTime)
+    last_error = Column(String)
     created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)

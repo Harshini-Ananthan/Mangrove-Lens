@@ -11,7 +11,10 @@ import pandas as pd
 from src.domain.contracts import ModelPrediction
 
 
-FEATURES = ["ndvi_lag_1", "ndvi_lag_12", "ndvi_roll_3", "co_mean", "ndmi_mean", "vv_mean", "vh_mean", "month"]
+FEATURES = [
+    "ndvi_lag_1", "ndvi_lag_12", "ndvi_roll_3", "co_lag_1",
+    "ndmi_lag_1", "vv_lag_1", "vh_lag_1", "month",
+]
 
 
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
@@ -20,8 +23,10 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     data["ndvi_lag_1"] = grouped["ndvi_mean"].shift(1)
     data["ndvi_lag_12"] = grouped["ndvi_mean"].shift(12)
     data["ndvi_roll_3"] = grouped["ndvi_mean"].transform(lambda values: values.shift(1).rolling(3).median())
+    for source in ("co_mean", "ndmi_mean", "vv_mean", "vh_mean"):
+        data[source.replace("_mean", "_lag_1")] = grouped[source].shift(1)
     data["month"] = pd.to_datetime(data["period_start"]).dt.month
-    data["target_ndvi"] = grouped["ndvi_mean"].shift(-1)
+    data["target_ndvi"] = data["ndvi_mean"]
     return data
 
 

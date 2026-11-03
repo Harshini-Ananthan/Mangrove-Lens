@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, GeoJSON, Marker, Popup, useMapEvents, Polygon } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, useMapEvents, Polygon } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { sundarbansGeoJSON, mockStations } from '../data/mockData';
 
 // Component to handle map events and report back to parent
 const MapEvents = ({ onMove, onZoom }) => {
@@ -117,26 +116,13 @@ export const MapView = ({ center, zoom, layers, setCenter, setZoom, onPolygonDra
         )}
 
         {/* Mangrove Extent / NDVI Layer (Mocked with GeoJSON) */}
-        {(layers.mangrove_extent || layers.ndvi) && (
+        {(layers.mangrove_extent || layers.ndvi) && aoiGeoJSON && (
           <GeoJSON 
             key={`sundarbans-${layers.ndvi ? 'ndvi' : 'extent'}`} 
-            data={aoiGeoJSON || sundarbansGeoJSON}
+            data={aoiGeoJSON}
             style={geoJsonStyle} 
           />
         )}
-
-        {/* Monitoring Stations Layer */}
-        {layers.stations && mockStations.map((station) => (
-          <Marker key={station.id} position={[station.lat, station.lng]}>
-            <Popup>
-              <div className="text-sm">
-                <strong className="block text-primary mb-1">{station.name}</strong>
-                <div>Status: <span className={station.status === 'Active' ? 'text-green-600' : 'text-orange-500'}>{station.status}</span></div>
-                <div>Sensor: {station.sensor}</div>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
 
         <MapEvents onMove={setCenter} onZoom={setZoom} />
       </MapContainer>
