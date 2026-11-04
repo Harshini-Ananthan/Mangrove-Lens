@@ -62,7 +62,7 @@ class MonitoringWorkflow:
                     else {}
                 )
                 generated_report = generate_monitoring_report(
-                    record.id, observation, prediction, decision, images
+                    record.id, observation, prediction, decision, images, self._system_audit()
                 )
             except Exception as exc:
                 report_error = str(exc)
@@ -193,3 +193,27 @@ class MonitoringWorkflow:
         self.db.commit()
         self.db.refresh(record)
         return record
+
+    def _system_audit(self) -> dict:
+        manifest = self.model.manifest
+        return {
+            "observation_count": self.db.query(MonthlyFeatureRecord).count(),
+            "valid_count": self.db.query(MonthlyFeatureRecord).filter_by(quality_status="valid").count(),
+            "low_coverage_count": self.db.query(MonthlyFeatureRecord).filter_by(quality_status="low_coverage").count(),
+            "completed_job_count": self.db.query(MonitoringJobRecord).filter_by(status="completed").count(),
+            "decision_count": self.db.query(RiskDecisionRecord).count(),
+            "alert_count": self.db.query(AlertOutboxRecord).count(),
+            "dataset_kind": manifest.get("dataset_kind"),
+            "data_start": manifest.get("data_period", {}).get("start"),
+            "data_end": manifest.get("data_period", {}).get("end"),
+            "model_metrics": manifest.get("metrics", {}),
+            "observational_gate_passed": manifest.get("observational_gate_passed", False),
+            "production_approved": manifest.get("production_approved", False),
+            "scheduler_enabled": settings.ENABLE_SCHEDULER,
+            "automatic_email_enabled": bool(
+                settings.ENABLE_EXTERNAL_NOTIFICATIONS
+                and settings.AUTO_EMAIL_REPORTS
+                and settings.SMTP_HOST
+                and settings.ALERT_EMAIL_TO
+            ),
+        }
