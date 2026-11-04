@@ -13,6 +13,7 @@ from src.providers.base import SatelliteProvider
 from src.services.decision import assess_risk
 from src.services.grid import resolve_region_geometry
 from src.services.notifications import configured_channels
+from src.utils.config import settings
 
 
 def load_operational_geometry(path: str) -> dict:
@@ -103,13 +104,17 @@ class MonitoringWorkflow:
             ).one_or_none()
             if existing is None:
                 if channel == "dashboard":
-                    status = "approved"
+                    status = "sent"
                 elif self.model.manifest.get("production_approved"):
-                    status = "pending_review"
+                    status = "pending_review" if settings.REQUIRE_ALERT_APPROVAL else "approved"
                 else:
                     status = "pending_validation"
                 self.db.add(AlertOutboxRecord(
-                    decision_id=decision_record.id, channel=channel, status=status, payload=payload
+                    decision_id=decision_record.id,
+                    channel=channel,
+                    status=status,
+                    payload=payload,
+                    sent_at=datetime.utcnow() if channel == "dashboard" else None,
                 ))
         self.db.commit()
 

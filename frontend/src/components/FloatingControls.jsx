@@ -1,6 +1,5 @@
 import React from 'react';
-import { FiLayers, FiCrosshair, FiRefreshCw, FiMaximize, FiEdit2 } from 'react-icons/fi';
-import { LuRuler } from 'react-icons/lu';
+import { FiCrosshair, FiRefreshCw, FiMaximize, FiActivity } from 'react-icons/fi';
 
 const ControlButton = ({ icon: Icon, label, onClick }) => (
   <button 
@@ -16,26 +15,24 @@ const ControlButton = ({ icon: Icon, label, onClick }) => (
   </button>
 );
 
-export const FloatingControls = ({ onReset, onLocate, onFullscreen, onDrawToggle, isDrawingMode }) => {
+export const FloatingControls = ({ onReset, onLocate, onFullscreen, onAnalyze, isAnalyzing }) => {
   return (
     <div className="absolute right-6 bottom-24 z-[1000] flex flex-col gap-2">
-      <ControlButton icon={FiLayers} label="Layers" />
-      <div className="w-10 h-px bg-gray-200 my-1"></div>
       <ControlButton icon={FiCrosshair} label="Locate Me" onClick={onLocate} />
       <ControlButton icon={FiRefreshCw} label="Reset View" onClick={onReset} />
       <ControlButton icon={FiMaximize} label="Fullscreen" onClick={onFullscreen} />
       <div className="w-10 h-px bg-gray-200 my-1"></div>
       <button 
-        onClick={onDrawToggle}
-        className={`w-10 h-10 rounded-lg flex items-center justify-center shadow-sm border transition-colors group relative ${isDrawingMode ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 hover:text-primary hover:bg-gray-50 border-gray-100'}`}
-        aria-label="Draw Polygon"
+        onClick={onAnalyze}
+        disabled={isAnalyzing}
+        className="w-10 h-10 rounded-lg flex items-center justify-center shadow-sm border transition-colors group relative bg-primary text-white border-primary disabled:cursor-wait disabled:opacity-60"
+        aria-label="Analyze live operational AOI"
       >
-        <FiEdit2 size={18} />
+        <FiActivity size={18} className={isAnalyzing ? 'animate-pulse' : ''} />
         <span className="absolute right-full mr-2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-          {isDrawingMode ? "Cancel Drawing" : "Draw Polygon"}
+          {isAnalyzing ? "Analyzing live data" : "Analyze live AOI"}
         </span>
       </button>
-      <ControlButton icon={LuRuler} label="Measure Distance" />
     </div>
   );
 };

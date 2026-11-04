@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any
 
 from dateutil.relativedelta import relativedelta
@@ -172,9 +172,59 @@ class EarthEngineProvider(SatelliteProvider):
             ),
             provenance={
                 "ee_project": settings.EE_PROJECT_ID,
+                "query_executed_at": datetime.now(timezone.utc).isoformat(),
+                "period_filter_start": start,
+                "period_filter_end_exclusive": end,
                 "aggregation_scale_m": 100,
                 "native_optical_resolution_m": 10,
                 "mangrove_reference_year": self.MANGROVE_REFERENCE_YEAR,
                 "mangrove_reference_role": "independent extent mask",
             },
         )
+
+    def visualization_tile(
+        self, geometry: dict[str, Any], period_start: date, layer: str = "ndvi"
+    ) -> dict[str, Any]:
+        """Create a short-lived Earth Engine map tile URL from the live collections."""
+        ready, message = self.readiness()
+        if not ready:
+            raise RuntimeError(message)
+        if layer not in {"ndvi", "ndmi"}:
+            raise ValueError("layer must be ndvi or ndmi")
+        ee = self._ee
+        period_start = period_start.replace(day=1)
+        period_end = period_start + relativedelta(months=1)
+        start, end = period_start.isoformat(), period_end.isoformat()
+        roi = ee.Geometry(geometry)
+        extent = (
+            ee.FeatureCollection(self.MANGROVE_EXTENT)
+            .filter(ee.Filter.eq("year", self.MANGROVE_REFERENCE_YEAR))
+            .filterBounds(roi)
+        )
+        mangrove_mask = extent.reduceToImage(["gridcode"], ee.Reducer.first()).gt(0)
+        collection = (
+            ee.ImageCollection(self.S2)
+            .filterBounds(roi)
+            .filterDate(start, end)
+            .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 80))
+            .map(self._mask_s2)
+            .map(self._add_indices)
+        )
+        image_count = int(collection.size().getInfo())
+        if image_count == 0:
+            raise RuntimeError("No Sentinel-2 images are available for the requested period")
+        band = layer.upper()
+        image = collection.median().select(band).updateMask(mangrove_mask).clip(roi)
+        palette = ["8b0000", "d73027", "fdae61", "ffffbf", "a6d96a", "1a9850", "006400"]
+        map_info = image.getMapId({"min": -0.2, "max": 0.9, "palette": palette})
+        return {
+            "layer": layer,
+            "period_start": start,
+            "period_end_exclusive": end,
+            "tile_url": map_info["tile_fetcher"].url_format,
+            "image_count": image_count,
+            "source_collection": self.S2,
+            "mask_collection": self.MANGROVE_EXTENT,
+            "ee_project": settings.EE_PROJECT_ID,
+            "query_executed_at": datetime.now(timezone.utc).isoformat(),
+        }

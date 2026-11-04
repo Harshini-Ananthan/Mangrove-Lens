@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiChevronDown, FiLayers } from 'react-icons/fi';
 import { LayerToggle } from './LayerToggle';
-import { layerOptions } from '../data/mockData';
+import { layerOptions } from '../data/dashboardConfig';
 
 export const LayerPanel = ({ layers, toggleLayer }) => {
   const [isOpen, setIsOpen] = useState(true);

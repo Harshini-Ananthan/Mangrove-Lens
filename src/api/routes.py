@@ -6,8 +6,9 @@ import uuid
 import hmac
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel
+from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -18,6 +19,8 @@ from src.providers import get_satellite_provider
 from src.services.monitoring import MonitoringWorkflow
 from src.services.notifications import send_channel
 from src.services.grid import build_grid
+from src.services.grid import resolve_region_geometry
+from src.providers.earth_engine import EarthEngineProvider
 from src.utils.config import settings
 
 router = APIRouter()
@@ -26,6 +29,7 @@ router = APIRouter()
 class MonitoringRunRequest(BaseModel):
     region_id: str = "sundarbans-transboundary-v1"
     period_start: datetime.date
+    refresh: bool = False
 
 
 class AlertApprovalRequest(BaseModel):
@@ -71,7 +75,7 @@ def readiness_check(db: Session = Depends(get_db)):
     except Exception as exc:
         database = {"ready": False, "detail": str(exc)}
     model = ForecastModel()
-    ready = satellite_ready and database["ready"]
+    ready = satellite_ready and database["ready"] and model.ready
     return {
         "ready": ready,
         "database": database,
@@ -86,13 +90,27 @@ def run_monitoring(
     _: None = Depends(require_operator),
 ):
     period = request.period_start.replace(day=1)
+    earliest = datetime.date.fromisoformat(settings.ANALYSIS_START_DATE).replace(day=1)
+    latest_complete = datetime.date.today().replace(day=1) - relativedelta(months=1)
+    if period < earliest or period > latest_complete:
+        raise HTTPException(
+            status_code=422,
+            detail=f"period_start must be between {earliest} and {latest_complete}",
+        )
     provider = get_satellite_provider()
+    provider_ready, provider_detail = provider.readiness()
+    if not provider_ready:
+        raise HTTPException(status_code=503, detail=provider_detail)
+    try:
+        resolve_region_geometry(request.region_id, get_aoi()["features"][0]["geometry"])
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     existing = db.query(MonitoringJobRecord).filter_by(
         region_id=request.region_id, period_start=period, provider=provider.name
     ).filter(MonitoringJobRecord.status.in_(["queued", "running", "completed"])).order_by(
         MonitoringJobRecord.requested_at.desc()
     ).first()
-    if existing:
+    if existing and not request.refresh:
         return {"job_id": existing.id, "status": existing.status, "deduplicated": True}
     job = MonitoringJobRecord(
         id=str(uuid.uuid4()), region_id=request.region_id, period_start=period,
@@ -106,7 +124,7 @@ def run_monitoring(
 
 @router.get("/monitoring/features")
 def get_features(
-    region_id: str = "sundarbans-transboundary-v1", limit: int = 120, db: Session = Depends(get_db)
+    region_id: str = "sundarbans-transboundary-v1", limit: int = Query(120, ge=1, le=500), db: Session = Depends(get_db)
 ):
     return db.query(MonthlyFeatureRecord).filter_by(region_id=region_id).order_by(
         MonthlyFeatureRecord.period_start.desc()
@@ -115,7 +133,7 @@ def get_features(
 
 @router.get("/monitoring/decisions")
 def get_decisions(
-    region_id: str = "sundarbans-transboundary-v1", limit: int = 100, db: Session = Depends(get_db)
+    region_id: str = "sundarbans-transboundary-v1", limit: int = Query(100, ge=1, le=500), db: Session = Depends(get_db)
 ):
     return db.query(RiskDecisionRecord).filter_by(region_id=region_id).order_by(
         RiskDecisionRecord.period_start.desc()
@@ -123,14 +141,14 @@ def get_decisions(
 
 
 @router.get("/monitoring/jobs")
-def get_jobs(limit: int = 50, db: Session = Depends(get_db)):
+def get_jobs(limit: int = Query(50, ge=1, le=200), db: Session = Depends(get_db)):
     return db.query(MonitoringJobRecord).order_by(MonitoringJobRecord.started_at.desc()).limit(
         min(limit, 200)
     ).all()
 
 
 @router.get("/alerts/outbox")
-def get_alert_outbox(status_filter: str | None = None, limit: int = 100, db: Session = Depends(get_db)):
+def get_alert_outbox(status_filter: str | None = None, limit: int = Query(100, ge=1, le=500), db: Session = Depends(get_db)):
     query = db.query(AlertOutboxRecord)
     if status_filter:
         query = query.filter_by(status=status_filter)
@@ -147,6 +165,10 @@ def approve_alert(
         raise HTTPException(status_code=404, detail="Alert not found")
     if alert.channel == "dashboard":
         raise HTTPException(status_code=409, detail="Dashboard alerts do not require approval")
+    if alert.status == "pending_validation":
+        raise HTTPException(status_code=409, detail="Alert is blocked until the model is production-approved")
+    if alert.status != "pending_review":
+        raise HTTPException(status_code=409, detail=f"Alert status {alert.status} cannot be approved")
     alert.status = "approved"
     alert.approved_by = request.approved_by
     alert.approved_at = datetime.datetime.utcnow()
@@ -161,6 +183,8 @@ def dispatch_alert(
     alert = db.get(AlertOutboxRecord, alert_id)
     if alert is None:
         raise HTTPException(status_code=404, detail="Alert not found")
+    if alert.channel == "dashboard":
+        raise HTTPException(status_code=409, detail="Dashboard alerts are delivered through the outbox feed")
     if alert.status not in {"approved", "failed"}:
         raise HTTPException(status_code=409, detail=f"Alert status {alert.status} cannot be dispatched")
     try:
@@ -185,3 +209,20 @@ def get_grid(cell_size_km: float = 5.0):
     if cell_size_km < 1 or cell_size_km > 25:
         raise HTTPException(status_code=422, detail="cell_size_km must be between 1 and 25")
     return build_grid(get_aoi()["features"][0]["geometry"], cell_size_km)
+
+
+@router.get("/map/tiles")
+def get_live_map_tiles(period_start: datetime.date, layer: str = "ndvi"):
+    period = period_start.replace(day=1)
+    latest_complete = datetime.date.today().replace(day=1) - relativedelta(months=1)
+    if period > latest_complete:
+        raise HTTPException(status_code=422, detail=f"period_start must not exceed {latest_complete}")
+    provider = get_satellite_provider()
+    if not isinstance(provider, EarthEngineProvider):
+        raise HTTPException(status_code=409, detail="Live map tiles require SATELLITE_PROVIDER=earth_engine")
+    try:
+        return provider.visualization_tile(get_aoi()["features"][0]["geometry"], period, layer)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc

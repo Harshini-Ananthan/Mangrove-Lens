@@ -15,7 +15,11 @@ Invoke-RestMethod http://localhost:8000/api/v1/health
 Invoke-RestMethod http://localhost:8000/api/v1/readiness
 ```
 
+Compose loads `.env` by default. For live operation set `SATELLITE_PROVIDER=earth_engine` and `EE_PROJECT_ID=nex-sync`. Local Earth Engine and Application Default Credential files are mounted read-only by `compose.yaml`; production deployments should provide equivalent workload/service-account credentials through their secret manager.
+
 The dashboard is served at `http://localhost:5173`. API documentation is at `http://localhost:8000/docs`.
+
+Enable **Live Earth Engine NDVI** in the layer panel to request a dynamically generated, mangrove-masked Sentinel-2 tile composite for June of the selected year. The **Analyze live AOI** map control triggers a forced fresh monthly acquisition for the full transboundary operational AOI and selected year, followed by model inference and risk assessment.
 
 ## Historical acquisition and model training
 

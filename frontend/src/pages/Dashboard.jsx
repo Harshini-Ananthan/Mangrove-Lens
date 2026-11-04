@@ -6,7 +6,7 @@ import { BottomStatusBar } from '../components/BottomStatusBar';
 
 import { Legend } from '../components/Legend';
 import { TopRightLogo } from '../components/TopRightLogo';
-import { approveAlert, dispatchAlert, fetchAlertOutbox, fetchAoi, fetchHealth, fetchMonitoringDecisions, fetchMonitoringFeatures, runMonitoring, waitForMonitoringJob } from '../api';
+import { approveAlert, dispatchAlert, fetchAlertOutbox, fetchAoi, fetchHealth, fetchLiveMapTiles, fetchMonitoringDecisions, fetchMonitoringFeatures, runMonitoring, waitForMonitoringJob } from '../api';
 
 export const Dashboard = () => {
   // State for Map
@@ -16,12 +16,12 @@ export const Dashboard = () => {
   // State for live analysis
   const [analysisData, setAnalysisData] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [trendData, setTrendData] = useState([]);
   const [aoi, setAoi] = useState(null);
   const [systemStatus, setSystemStatus] = useState(null);
   const [error, setError] = useState(null);
   const [alerts, setAlerts] = useState([]);
+  const [liveTile, setLiveTile] = useState(null);
   
   // State for Timeline
   const [selectedYear, setSelectedYear] = useState(2025);
@@ -30,8 +30,6 @@ export const Dashboard = () => {
   const [layers, setLayers] = useState({
     mangrove_extent: true,
     ndvi: false,
-    carbon: false,
-    prediction: false,
     satellite: true,
   });
 
@@ -61,6 +59,20 @@ export const Dashboard = () => {
     refresh().catch(err => setError(err.response?.data?.detail || err.message));
   }, []);
 
+  useEffect(() => {
+    if (!layers.ndvi) {
+      setLiveTile(null);
+      return;
+    }
+    setError(null);
+    fetchLiveMapTiles(`${selectedYear}-06-01`)
+      .then(setLiveTile)
+      .catch(err => {
+        setLiveTile(null);
+        setError(err.response?.data?.detail || err.message);
+      });
+  }, [layers.ndvi, selectedYear]);
+
   const toggleLayer = (layerId) => {
     setLayers(prev => ({
       ...prev,
@@ -85,7 +97,7 @@ export const Dashboard = () => {
     }
   };
 
-  const handlePolygonDrawn = async () => {
+  const handleAnalyze = async () => {
     try {
       setIsAnalyzing(true);
       setError(null);
@@ -143,10 +155,8 @@ export const Dashboard = () => {
             setZoom={setZoom}
             selectedYear={selectedYear}
             layers={layers}
-            onPolygonDrawn={handlePolygonDrawn}
-            isDrawingMode={isDrawingMode}
-            setIsDrawingMode={setIsDrawingMode}
             aoiGeoJSON={aoi}
+            liveTile={liveTile}
           />
 
           <Legend layers={layers} />
@@ -155,8 +165,8 @@ export const Dashboard = () => {
             onReset={handleReset}
             onLocate={handleLocate}
             onFullscreen={handleFullscreen}
-            isDrawingMode={isDrawingMode}
-            onDrawToggle={() => setIsDrawingMode(!isDrawingMode)}
+            isAnalyzing={isAnalyzing}
+            onAnalyze={handleAnalyze}
           />
 
           <BottomStatusBar 

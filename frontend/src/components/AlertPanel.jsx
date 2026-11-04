@@ -21,7 +21,7 @@ export const AlertPanel = ({ alerts = [], onApprove, onDispatch }) => (
             {alert.status === 'pending_review' && alert.channel !== 'dashboard' && (
               <button onClick={() => onApprove(alert.id)} className="rounded-lg bg-secondary px-2 py-1 font-semibold text-white">Approve</button>
             )}
-            {(alert.status === 'approved' || alert.status === 'failed') && (
+            {alert.channel !== 'dashboard' && (alert.status === 'approved' || alert.status === 'failed') && (
               <button onClick={() => onDispatch(alert.id)} className="rounded-lg bg-primary px-2 py-1 font-semibold text-white">Dispatch</button>
             )}
           </div>

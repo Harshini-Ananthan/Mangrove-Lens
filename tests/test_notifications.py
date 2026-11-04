@@ -1,7 +1,12 @@
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
-from src.api.routes import require_operator
+from src.api.routes import AlertApprovalRequest, approve_alert, dispatch_alert, require_operator
+from src.database.db import Base
+from src.database.models import AlertOutboxRecord
 from src.services.notifications import configured_channels, send_channel
 from src.utils.config import settings
 
@@ -22,3 +27,35 @@ def test_operator_key_is_enforced_when_configured(monkeypatch):
         require_operator("wrong")
     assert exc.value.status_code == 401
     assert require_operator("secret") is None
+
+
+def _alert_db():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine)()
+
+
+def test_pending_validation_alert_cannot_bypass_model_approval():
+    db = _alert_db()
+    alert = AlertOutboxRecord(
+        decision_id=1, channel="email", status="pending_validation", payload={"severity": "high"}
+    )
+    db.add(alert)
+    db.commit()
+    with pytest.raises(HTTPException) as exc:
+        approve_alert(alert.id, AlertApprovalRequest(approved_by="operator"), db, None)
+    assert exc.value.status_code == 409
+    db.close()
+
+
+def test_dashboard_alert_cannot_be_dispatched_as_external_notification():
+    db = _alert_db()
+    alert = AlertOutboxRecord(
+        decision_id=1, channel="dashboard", status="sent", payload={"severity": "moderate"}
+    )
+    db.add(alert)
+    db.commit()
+    with pytest.raises(HTTPException) as exc:
+        dispatch_alert(alert.id, db, None)
+    assert exc.value.status_code == 409
+    db.close()

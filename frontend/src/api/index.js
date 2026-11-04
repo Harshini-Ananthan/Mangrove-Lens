@@ -33,8 +33,13 @@ export const fetchMonitoringDecisions = async (regionId = 'sundarbans-transbound
   return response.data;
 };
 
-export const runMonitoring = async (periodStart, regionId = 'sundarbans-transboundary-v1') => {
-  const response = await api.post('/monitoring/run', { region_id: regionId, period_start: periodStart });
+export const runMonitoring = async (periodStart, regionId = 'sundarbans-transboundary-v1', refresh = true) => {
+  const response = await api.post('/monitoring/run', { region_id: regionId, period_start: periodStart, refresh });
+  return response.data;
+};
+
+export const fetchLiveMapTiles = async (periodStart, layer = 'ndvi') => {
+  const response = await api.get('/map/tiles', { params: { period_start: periodStart, layer } });
   return response.data;
 };
 

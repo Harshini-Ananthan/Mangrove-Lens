@@ -1,12 +1,14 @@
 services:
   api:
     build: .
-    env_file: ${ENV_FILE:-.env.example}
+    env_file: ${ENV_FILE:-.env}
     environment:
       DATABASE_URL: postgresql+psycopg://mangrove:${POSTGRES_PASSWORD:-mangrove}@db:5432/mangrove_lens
     volumes:
       - ./data:/app/data
       - ./models:/app/models:ro
+      - ${USERPROFILE}/.config/earthengine/credentials:/root/.config/earthengine/credentials:ro
+      - ${APPDATA}/gcloud/application_default_credentials.json:/root/.config/gcloud/application_default_credentials.json:ro
     ports:
       - "8000:8000"
     depends_on:
@@ -16,12 +18,14 @@ services:
   scheduler:
     build: .
     command: ["python", "-m", "scripts.run_scheduler"]
-    env_file: ${ENV_FILE:-.env.example}
+    env_file: ${ENV_FILE:-.env}
     environment:
       DATABASE_URL: postgresql+psycopg://mangrove:${POSTGRES_PASSWORD:-mangrove}@db:5432/mangrove_lens
     volumes:
       - ./data:/app/data
       - ./models:/app/models:ro
+      - ${USERPROFILE}/.config/earthengine/credentials:/root/.config/earthengine/credentials:ro
+      - ${APPDATA}/gcloud/application_default_credentials.json:/root/.config/gcloud/application_default_credentials.json:ro
     profiles: ["scheduler"]
 
   frontend:
