@@ -12,7 +12,9 @@ from src.models.forecast import ForecastModel
 from src.providers.base import SatelliteProvider
 from src.services.decision import assess_risk
 from src.services.grid import resolve_region_geometry
-from src.services.notifications import configured_channels
+from src.services.notifications import configured_channels, send_channel
+from src.services.reporting import generate_monitoring_report
+from src.utils.config import settings
 
 
 def load_operational_geometry(path: str) -> dict:
@@ -48,7 +50,23 @@ class MonitoringWorkflow:
             prediction = self.model.predict(self._prediction_features(region_id, feature))
             decision = assess_risk(observation, prediction)
             record = self._upsert_decision(region_id, period_start, prediction, decision)
-            self._queue_alerts(record, decision)
+            generated_report, report_error = None, None
+            try:
+                images = (
+                    self.provider.report_images(
+                        resolve_region_geometry(region_id, load_operational_geometry(self.aoi_path)),
+                        period_start,
+                        settings.REPORT_IMAGE_DIMENSIONS,
+                    )
+                    if hasattr(self.provider, "report_images")
+                    else {}
+                )
+                generated_report = generate_monitoring_report(
+                    record.id, observation, prediction, decision, images, self._system_audit()
+                )
+            except Exception as exc:
+                report_error = str(exc)
+            self._queue_alerts(record, decision, generated_report)
             job.status, job.checkpoint, job.finished_at = "completed", "reported", datetime.utcnow()
             self.db.commit()
             return {
@@ -57,6 +75,8 @@ class MonitoringWorkflow:
                 "prediction": prediction.model_dump(mode="json"),
                 "decision": {**decision.model_dump(mode="json"), "severity": decision.severity.label},
                 "decision_id": record.id,
+                "report_path": str(generated_report) if generated_report else None,
+                "report_error": report_error,
             }
         except Exception as exc:
             job.status, job.error, job.finished_at = "failed", str(exc), datetime.utcnow()
@@ -85,9 +105,7 @@ class MonitoringWorkflow:
         self.db.refresh(record)
         return record
 
-    def _queue_alerts(self, decision_record, decision):
-        if decision.severity.value < 2:
-            return
+    def _queue_alerts(self, decision_record, decision, generated_report=None):
         payload = {
             "decision_id": decision_record.id,
             "region_id": decision_record.region_id,
@@ -96,21 +114,45 @@ class MonitoringWorkflow:
             "risk_score": decision.score,
             "evidence": decision.evidence,
             "recommendations": decision.recommendations,
+            "notification_type": "risk_alert" if decision.severity.value >= 2 else "monthly_report",
+            "report_path": str(generated_report) if generated_report else None,
         }
-        for channel in configured_channels():
+        channels = configured_channels()
+        if decision.severity.value < 2:
+            channels = [channel for channel in channels if channel == "email" and settings.AUTO_EMAIL_REPORTS]
+        dispatchable = []
+        for channel in channels:
             existing = self.db.query(AlertOutboxRecord).filter_by(
                 decision_id=decision_record.id, channel=channel
             ).one_or_none()
             if existing is None:
                 if channel == "dashboard":
-                    status = "approved"
+                    status = "sent"
                 elif self.model.manifest.get("production_approved"):
-                    status = "pending_review"
+                    status = "pending_review" if settings.REQUIRE_ALERT_APPROVAL else "approved"
                 else:
                     status = "pending_validation"
-                self.db.add(AlertOutboxRecord(
-                    decision_id=decision_record.id, channel=channel, status=status, payload=payload
-                ))
+                alert = AlertOutboxRecord(
+                    decision_id=decision_record.id,
+                    channel=channel,
+                    status=status,
+                    payload=payload,
+                    sent_at=datetime.utcnow() if channel == "dashboard" else None,
+                )
+                self.db.add(alert)
+                dispatchable.append(alert)
+        self.db.commit()
+        if not settings.ENABLE_EXTERNAL_NOTIFICATIONS:
+            return
+        for alert in dispatchable:
+            if alert.channel == "dashboard" or alert.status != "approved":
+                continue
+            try:
+                alert.attempts += 1
+                send_channel(alert.channel, alert.payload)
+                alert.status, alert.sent_at, alert.last_error = "sent", datetime.utcnow(), None
+            except Exception as exc:
+                alert.status, alert.last_error = "failed", str(exc)
         self.db.commit()
 
     def _prediction_features(self, region_id: str, current: MonthlyFeatureRecord) -> dict[str, float]:
@@ -151,3 +193,27 @@ class MonitoringWorkflow:
         self.db.commit()
         self.db.refresh(record)
         return record
+
+    def _system_audit(self) -> dict:
+        manifest = self.model.manifest
+        return {
+            "observation_count": self.db.query(MonthlyFeatureRecord).count(),
+            "valid_count": self.db.query(MonthlyFeatureRecord).filter_by(quality_status="valid").count(),
+            "low_coverage_count": self.db.query(MonthlyFeatureRecord).filter_by(quality_status="low_coverage").count(),
+            "completed_job_count": self.db.query(MonitoringJobRecord).filter_by(status="completed").count(),
+            "decision_count": self.db.query(RiskDecisionRecord).count(),
+            "alert_count": self.db.query(AlertOutboxRecord).count(),
+            "dataset_kind": manifest.get("dataset_kind"),
+            "data_start": manifest.get("data_period", {}).get("start"),
+            "data_end": manifest.get("data_period", {}).get("end"),
+            "model_metrics": manifest.get("metrics", {}),
+            "observational_gate_passed": manifest.get("observational_gate_passed", False),
+            "production_approved": manifest.get("production_approved", False),
+            "scheduler_enabled": settings.ENABLE_SCHEDULER,
+            "automatic_email_enabled": bool(
+                settings.ENABLE_EXTERNAL_NOTIFICATIONS
+                and settings.AUTO_EMAIL_REPORTS
+                and settings.SMTP_HOST
+                and settings.ALERT_EMAIL_TO
+            ),
+        }

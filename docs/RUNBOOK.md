@@ -15,7 +15,11 @@ Invoke-RestMethod http://localhost:8000/api/v1/health
 Invoke-RestMethod http://localhost:8000/api/v1/readiness
 ```
 
+Compose loads `.env` by default. For live operation set `SATELLITE_PROVIDER=earth_engine` and `EE_PROJECT_ID=nex-sync`. Local Earth Engine and Application Default Credential files are mounted read-only by `compose.yaml`; production deployments should provide equivalent workload/service-account credentials through their secret manager.
+
 The dashboard is served at `http://localhost:5173`. API documentation is at `http://localhost:8000/docs`.
+
+Enable **Live Earth Engine NDVI** in the layer panel to request a dynamically generated, mangrove-masked Sentinel-2 tile composite for June of the selected year. The **Analyze live AOI** map control triggers a forced fresh monthly acquisition for the full transboundary operational AOI and selected year, followed by model inference and risk assessment.
 
 ## Historical acquisition and model training
 
@@ -28,13 +32,34 @@ Do not approve the generated model merely because training completed. Review `re
 
 ## Monthly workflow
 
-Run the scheduler profile only after the model and readiness checks pass:
+The scheduler starts with the normal Compose stack and performs a startup reconciliation plus a monthly run on the fifth day:
 
 ```powershell
-docker compose --profile scheduler up -d scheduler
+docker compose up -d
+docker compose logs -f scheduler
 ```
 
-It runs the latest complete month on the fifth day of each month. Jobs are idempotently deduplicated by region, period, and provider at the API boundary.
+The autonomous cycle backfills missing Earth Engine months, runs inference/reporting/alerts for the latest complete month, and then retrains the Random Forest for the following month. Retraining is promoted only when it beats the declared persistence baseline. Jobs are idempotently deduplicated by region, period, and provider.
+
+## Automatic official email reports
+
+Set the following in `.env` to enable fully automatic monthly PDF delivery after SMTP is configured:
+
+```env
+SMTP_HOST=smtp.example.org
+SMTP_PORT=587
+SMTP_USERNAME=sender@example.org
+SMTP_PASSWORD=use-a-secret-manager
+ALERT_EMAIL_TO=official1@example.org,official2@example.org
+ENABLE_EXTERNAL_NOTIFICATIONS=true
+AUTO_EMAIL_REPORTS=true
+AUTO_APPROVE_VALIDATED_MODELS=true
+REQUIRE_ALERT_APPROVAL=false
+```
+
+Restart the API and scheduler, then allow the scheduler to retrain once so the new manifest records the automatic observational validation gate. Keep `REQUIRE_ALERT_APPROVAL=true` when officials require review before high-impact email delivery.
+
+Every completed monitoring run creates `reports/generated/mangrove-lens-decision-<id>.pdf`. Reports contain live source provenance, quality/image counts, measurements, model outputs, evidence, recommendations, and high-resolution true-color and NDVI Earth Engine images. The dashboard **Export Report** button downloads the report for the selected period.
 
 ## Alert lifecycle
 

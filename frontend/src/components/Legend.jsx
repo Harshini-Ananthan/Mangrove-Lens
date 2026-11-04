@@ -26,13 +26,13 @@ export const Legend = ({ layers }) => {
           {showNdvi && (
             <div>
               <div className="flex justify-between text-[10px] text-gray-500 mb-1 font-medium">
-                <span>Low Vegetation</span>
-                <span>Healthy Mangrove</span>
+                <span>Low NDVI</span>
+                <span>High NDVI</span>
               </div>
-              <div className="h-2.5 w-full rounded-full bg-gradient-to-r from-yellow-100 via-yellow-400 to-green-600 shadow-inner"></div>
+              <div className="h-2.5 w-full rounded-full shadow-inner" style={{ background: 'linear-gradient(to right, #8b0000, #d73027, #fdae61, #ffffbf, #a6d96a, #1a9850, #006400)' }}></div>
               <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-                <span>0.0</span>
-                <span>1.0</span>
+                <span>−0.2</span>
+                <span>0.9</span>
               </div>
             </div>
           )}
@@ -40,7 +40,7 @@ export const Legend = ({ layers }) => {
           {showExtent && (
             <div className="flex items-center gap-3">
               <div className="w-4 h-4 rounded bg-[#0F766E] border border-white shadow-sm opacity-80"></div>
-              <span className="text-xs text-gray-600 font-medium">Mangrove Extent Area</span>
+              <span className="text-xs text-gray-600 font-medium">Operational AOI boundary</span>
             </div>
           )}
         </div>

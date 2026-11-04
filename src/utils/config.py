@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_CHAT_ID: str = ""
     REQUIRE_ALERT_APPROVAL: bool = True
+    AUTO_EMAIL_REPORTS: bool = True
+    AUTO_APPROVE_VALIDATED_MODELS: bool = False
+    ENABLE_AUTOMATED_RETRAINING: bool = True
+    REPORT_IMAGE_DIMENSIONS: int = 1800
     API_KEY: str = ""
 
     @property

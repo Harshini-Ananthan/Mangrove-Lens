@@ -14,6 +14,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from src.database.db import SessionLocal
 from src.database.models import MonthlyFeatureRecord
 from src.models.forecast import FEATURES, build_features
+from src.utils.config import settings
 
 
 def main():
@@ -62,14 +63,18 @@ def main():
     models.mkdir(exist_ok=True)
     reports.mkdir(exist_ok=True)
     artifact = models / "ndvi_forecast_rf.joblib"
-    joblib.dump(model, artifact)
-    version = f"rf-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{hashlib.sha256(artifact.read_bytes()).hexdigest()[:8]}"
+    artifact_tmp = artifact.with_suffix(".joblib.tmp")
+    joblib.dump(model, artifact_tmp)
+    version = f"rf-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{hashlib.sha256(artifact_tmp.read_bytes()).hexdigest()[:8]}"
     manifest = {
         "model_version": version, "features": FEATURES, "metrics": metrics,
         "trained_at": datetime.now(timezone.utc).isoformat(), "target": "current_month_ndvi_from_prior_observations",
         "validation": "last 12 complete observations held out", "random_seed": 42,
         "dataset_kind": "synthetic_demo" if set(frame["provider"]) == {"demo"} else "observational",
-        "production_approved": False,
+        "production_approved": bool(
+            settings.AUTO_APPROVE_VALIDATED_MODELS and set(frame["provider"]) == {"earth_engine"}
+        ),
+        "automated_promotion": bool(settings.AUTO_APPROVE_VALIDATED_MODELS),
         "observational_gate_passed": set(frame["provider"]) == {"earth_engine"},
         "data_period": {
             "start": str(pd.to_datetime(frame["period_start"]).min().date()),
@@ -80,7 +85,11 @@ def main():
             key=lambda item: item[1], reverse=True,
         )),
     }
-    (models / "ndvi_forecast_rf.manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    artifact_tmp.replace(artifact)
+    manifest_path = models / "ndvi_forecast_rf.manifest.json"
+    manifest_tmp = manifest_path.with_suffix(".json.tmp")
+    manifest_tmp.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    manifest_tmp.replace(manifest_path)
     (reports / "model_evaluation.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(json.dumps(manifest, indent=2))
 

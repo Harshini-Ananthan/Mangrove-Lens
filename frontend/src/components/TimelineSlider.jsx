@@ -1,5 +1,5 @@
 import React from 'react';
-import { timelineYears } from '../data/mockData';
+import { timelineYears } from '../data/dashboardConfig';
 
 export const TimelineSlider = ({ selectedYear, onChange }) => {
   return (
