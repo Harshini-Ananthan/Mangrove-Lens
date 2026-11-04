@@ -7,6 +7,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./models:/app/models:ro
+      - ./reports:/app/reports
       - ${USERPROFILE}/.config/earthengine/credentials:/root/.config/earthengine/credentials:ro
       - ${APPDATA}/gcloud/application_default_credentials.json:/root/.config/gcloud/application_default_credentials.json:ro
     ports:
@@ -23,10 +24,13 @@ services:
       DATABASE_URL: postgresql+psycopg://mangrove:${POSTGRES_PASSWORD:-mangrove}@db:5432/mangrove_lens
     volumes:
       - ./data:/app/data
-      - ./models:/app/models:ro
+      - ./models:/app/models
+      - ./reports:/app/reports
       - ${USERPROFILE}/.config/earthengine/credentials:/root/.config/earthengine/credentials:ro
       - ${APPDATA}/gcloud/application_default_credentials.json:/root/.config/gcloud/application_default_credentials.json:ro
-    profiles: ["scheduler"]
+    depends_on:
+      db:
+        condition: service_healthy
 
   frontend:
     build:

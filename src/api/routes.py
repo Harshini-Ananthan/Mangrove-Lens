@@ -7,6 +7,7 @@ import hmac
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
@@ -21,6 +22,7 @@ from src.services.notifications import send_channel
 from src.services.grid import build_grid
 from src.services.grid import resolve_region_geometry
 from src.providers.earth_engine import EarthEngineProvider
+from src.services.reporting import report_path
 from src.utils.config import settings
 
 router = APIRouter()
@@ -105,6 +107,16 @@ def run_monitoring(
         resolve_region_geometry(request.region_id, get_aoi()["features"][0]["geometry"])
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    prior_valid = db.query(MonthlyFeatureRecord).filter(
+        MonthlyFeatureRecord.region_id == request.region_id,
+        MonthlyFeatureRecord.period_start < period,
+        MonthlyFeatureRecord.quality_status == "valid",
+    ).count()
+    if prior_valid < 12:
+        raise HTTPException(
+            status_code=422,
+            detail=f"At least 12 prior valid monthly observations are required; found {prior_valid}",
+        )
     existing = db.query(MonitoringJobRecord).filter_by(
         region_id=request.region_id, period_start=period, provider=provider.name
     ).filter(MonitoringJobRecord.status.in_(["queued", "running", "completed"])).order_by(
@@ -226,3 +238,16 @@ def get_live_map_tiles(period_start: datetime.date, layer: str = "ndvi"):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/reports/{decision_id}")
+def download_report(decision_id: int, db: Session = Depends(get_db)):
+    if db.get(RiskDecisionRecord, decision_id) is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    path = report_path(decision_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Report has not been generated for this decision")
+    return FileResponse(
+        path, media_type="application/pdf", filename=path.name,
+        headers={"Cache-Control": "no-store"},
+    )

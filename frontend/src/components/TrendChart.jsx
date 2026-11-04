@@ -9,7 +9,7 @@ export const TrendChart = ({ data = [] }) => {
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">NDVI Trend</h3>
           <p className="text-[10px] text-gray-400">Historical Health Index</p>
         </div>
-        <span className="text-xs font-bold text-accent">+0.01 (Since 2020)</span>
+        <span className="text-xs font-bold text-accent">{data.length} live months</span>
       </div>
       <div className="h-24 w-full mt-2">
         <ResponsiveContainer width="100%" height="100%">

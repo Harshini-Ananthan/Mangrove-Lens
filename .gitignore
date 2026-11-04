@@ -76,6 +76,7 @@ models/*
 !models/ndvi_forecast_rf.manifest.json
 logs/*
 !logs/.gitkeep
+reports/generated/
 
 # IDEs
 .vscode/

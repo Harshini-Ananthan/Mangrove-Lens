@@ -1,5 +1,6 @@
 import pytest
 from fastapi import HTTPException
+from email.message import EmailMessage
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -59,3 +60,47 @@ def test_dashboard_alert_cannot_be_dispatched_as_external_notification():
         dispatch_alert(alert.id, db, None)
     assert exc.value.status_code == 409
     db.close()
+
+
+def test_configured_email_sends_pdf_report_attachment(monkeypatch, tmp_path):
+    report = tmp_path / "monitoring-report.pdf"
+    report.write_bytes(b"%PDF-1.4 verified report")
+    sent = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout):
+            assert host == "smtp.example.test"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def starttls(self):
+            pass
+
+        def login(self, username, password):
+            assert (username, password) == ("sender@example.test", "secret")
+
+        def send_message(self, message: EmailMessage):
+            sent.append(message)
+
+    monkeypatch.setattr(settings, "ENABLE_EXTERNAL_NOTIFICATIONS", True)
+    monkeypatch.setattr(settings, "SMTP_HOST", "smtp.example.test")
+    monkeypatch.setattr(settings, "SMTP_PORT", 587)
+    monkeypatch.setattr(settings, "SMTP_USERNAME", "sender@example.test")
+    monkeypatch.setattr(settings, "SMTP_PASSWORD", "secret")
+    monkeypatch.setattr(settings, "ALERT_EMAIL_TO", "official@example.test")
+    monkeypatch.setattr("src.services.notifications.smtplib.SMTP", FakeSMTP)
+
+    send_channel("email", {
+        "severity": "critical", "period_start": "2026-03-01", "evidence": ["verified"],
+        "notification_type": "risk_alert", "report_path": str(report),
+    })
+
+    assert len(sent) == 1
+    assert sent[0]["To"] == "official@example.test"
+    attachments = list(sent[0].iter_attachments())
+    assert len(attachments) == 1
+    assert attachments[0].get_filename() == "monitoring-report.pdf"

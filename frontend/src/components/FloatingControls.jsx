@@ -15,7 +15,7 @@ const ControlButton = ({ icon: Icon, label, onClick }) => (
   </button>
 );
 
-export const FloatingControls = ({ onReset, onLocate, onFullscreen, onAnalyze, isAnalyzing }) => {
+export const FloatingControls = ({ onReset, onLocate, onFullscreen, onAnalyze, isAnalyzing, canAnalyze }) => {
   return (
     <div className="absolute right-6 bottom-24 z-[1000] flex flex-col gap-2">
       <ControlButton icon={FiCrosshair} label="Locate Me" onClick={onLocate} />
@@ -24,13 +24,13 @@ export const FloatingControls = ({ onReset, onLocate, onFullscreen, onAnalyze, i
       <div className="w-10 h-px bg-gray-200 my-1"></div>
       <button 
         onClick={onAnalyze}
-        disabled={isAnalyzing}
+        disabled={isAnalyzing || !canAnalyze}
         className="w-10 h-10 rounded-lg flex items-center justify-center shadow-sm border transition-colors group relative bg-primary text-white border-primary disabled:cursor-wait disabled:opacity-60"
         aria-label="Analyze live operational AOI"
       >
         <FiActivity size={18} className={isAnalyzing ? 'animate-pulse' : ''} />
         <span className="absolute right-full mr-2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-          {isAnalyzing ? "Analyzing live data" : "Analyze live AOI"}
+          {isAnalyzing ? "Analyzing live data" : canAnalyze ? "Analyze live AOI" : "Needs 12 prior months"}
         </span>
       </button>
     </div>

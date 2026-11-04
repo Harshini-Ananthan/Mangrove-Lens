@@ -43,6 +43,18 @@ export const fetchLiveMapTiles = async (periodStart, layer = 'ndvi') => {
   return response.data;
 };
 
+export const downloadMonitoringReport = async (decisionId) => {
+  const response = await api.get(`/reports/${decisionId}`, { responseType: 'blob' });
+  const url = URL.createObjectURL(response.data);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `mangrove-lens-decision-${decisionId}.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+};
+
 export const fetchMonitoringJobs = async (limit = 50) => {
   const response = await api.get('/monitoring/jobs', { params: { limit } });
   return response.data;
