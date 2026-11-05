@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 from pathlib import Path
+from time import perf_counter
 
 from sqlalchemy.orm import Session
 
@@ -13,6 +15,7 @@ from src.providers.base import SatelliteProvider
 from src.services.decision import assess_risk
 from src.services.grid import resolve_region_geometry
 from src.services.notifications import configured_channels, send_channel
+from src.services.operations import emit_operation_event
 from src.services.reporting import generate_monitoring_report
 from src.utils.config import settings
 
@@ -27,6 +30,7 @@ class MonitoringWorkflow:
         self.provider, self.model, self.db, self.aoi_path = provider, model, db, aoi_path
 
     def run(self, region_id: str, period_start: date, job_id: str | None = None) -> dict:
+        run_started = perf_counter()
         period_start = period_start.replace(day=1)
         job = self.db.get(MonitoringJobRecord, job_id) if job_id else None
         if job is None:
@@ -38,37 +42,105 @@ class MonitoringWorkflow:
         else:
             job.status, job.checkpoint, job.started_at, job.error = "running", "acquisition", datetime.utcnow(), None
         self.db.commit()
+        self._event(job, "orchestrator", "started", "Autonomous monitoring workflow started", {
+            "provider": self.provider.name,
+            "model_version": self.model.version,
+            "data_mode": "live Earth Engine acquisition" if self.provider.name == "earth_engine" else self.provider.name,
+        })
+        image_pool = None
         try:
+            geometry = resolve_region_geometry(region_id, load_operational_geometry(self.aoi_path))
+            image_future = None
+            if hasattr(self.provider, "report_images"):
+                image_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="report-evidence")
+                image_future = image_pool.submit(
+                    self.provider.report_images, geometry, period_start, settings.REPORT_IMAGE_DIMENSIONS
+                )
+                self._event(job, "reporting_agent", "imagery_started", "High-resolution evidence imagery requested in parallel", {
+                    "dimensions": settings.REPORT_IMAGE_DIMENSIONS,
+                })
+            acquisition_started = perf_counter()
+            self._event(job, "acquisition_agent", "query_started", "Querying live satellite collections", {
+                "earth_engine_project": settings.EE_PROJECT_ID,
+                "period_start": period_start.isoformat(),
+            })
             observation = self.provider.monthly_observation(
-                region_id,
-                resolve_region_geometry(region_id, load_operational_geometry(self.aoi_path)),
-                period_start,
+                region_id, geometry, period_start,
             )
+            self._event(job, "acquisition_agent", "query_completed", "Live satellite observation acquired", {
+                "duration_seconds": round(perf_counter() - acquisition_started, 3),
+                "optical_images": observation.quality.optical_image_count,
+                "sar_images": observation.quality.sar_image_count,
+                "co_images": observation.quality.co_image_count,
+                "valid_pixel_fraction": round(observation.quality.valid_pixel_fraction, 6),
+                "query_executed_at": observation.provenance.get("query_executed_at"),
+                "collections": observation.source_collections,
+            })
             feature = self.store_observation(observation)
+            self._event(job, "data_quality_agent", "validated", "Observation passed through the data-quality gate", {
+                "quality_status": observation.quality.status,
+                "reasons": observation.quality.reasons,
+                "ndvi_mean": observation.ndvi_mean,
+                "ndmi_mean": observation.ndmi_mean,
+            })
             job.checkpoint = "prediction"
             self.db.commit()
-            prediction = self.model.predict(self._prediction_features(region_id, feature))
+            prediction_features = self._prediction_features(region_id, feature)
+            self._event(job, "feature_agent", "features_ready", "Leakage-safe temporal features generated", {
+                key: round(value, 6) if isinstance(value, float) else value
+                for key, value in prediction_features.items()
+            })
+            inference_started = perf_counter()
+            prediction = self.model.predict(prediction_features)
+            self._event(job, "forecast_agent", "inference_completed", "Random Forest inference completed", {
+                "duration_seconds": round(perf_counter() - inference_started, 4),
+                "model_version": prediction.model_version,
+                "expected_ndvi": round(prediction.expected_ndvi, 6),
+                "actual_ndvi": round(observation.ndvi_mean, 6),
+                "residual": round(prediction.residual, 6),
+                "uncertainty": round(prediction.uncertainty, 6),
+                "anomaly_score": round(prediction.anomaly_score, 6),
+            })
             decision = assess_risk(observation, prediction)
             record = self._upsert_decision(region_id, period_start, prediction, decision)
+            self._event(job, "risk_decision_agent", "decision_persisted", "Deterministic risk rules evaluated and persisted", {
+                "decision_id": record.id,
+                "severity": decision.severity.label,
+                "risk_score": decision.score,
+                "rule_version": decision.rule_version,
+                "human_review_required": decision.requires_human_review,
+                "evidence": decision.evidence,
+            })
             generated_report, report_error = None, None
             try:
-                images = (
-                    self.provider.report_images(
-                        resolve_region_geometry(region_id, load_operational_geometry(self.aoi_path)),
-                        period_start,
-                        settings.REPORT_IMAGE_DIMENSIONS,
-                    )
-                    if hasattr(self.provider, "report_images")
-                    else {}
-                )
+                images = image_future.result() if image_future else {}
                 generated_report = generate_monitoring_report(
                     record.id, observation, prediction, decision, images, self._system_audit()
                 )
+                self._event(job, "reporting_agent", "report_generated", "Professional audit report generated", {
+                    "report_path": str(generated_report),
+                    "evidence_images": list(images),
+                    "real_satellite_imagery": self.provider.name == "earth_engine",
+                })
             except Exception as exc:
                 report_error = str(exc)
+                self._event(job, "reporting_agent", "report_failed", "Report generation failed", {
+                    "error": report_error,
+                }, level="error")
             self._queue_alerts(record, decision, generated_report)
+            self._event(job, "alert_agent", "outbox_updated", "Alert and report delivery outbox evaluated", {
+                "configured_channels": configured_channels(),
+                "external_notifications_enabled": settings.ENABLE_EXTERNAL_NOTIFICATIONS,
+                "requires_approval": settings.REQUIRE_ALERT_APPROVAL,
+            })
             job.status, job.checkpoint, job.finished_at = "completed", "reported", datetime.utcnow()
             self.db.commit()
+            self._event(job, "orchestrator", "completed", "Autonomous monitoring workflow completed", {
+                "duration_seconds": round(perf_counter() - run_started, 3),
+                "decision_id": record.id,
+                "severity": decision.severity.label,
+                "report_generated": generated_report is not None,
+            })
             return {
                 "job_id": job.id,
                 "observation": observation.model_dump(mode="json"),
@@ -81,7 +153,21 @@ class MonitoringWorkflow:
         except Exception as exc:
             job.status, job.error, job.finished_at = "failed", str(exc), datetime.utcnow()
             self.db.commit()
+            self._event(job, "orchestrator", "failed", "Autonomous monitoring workflow failed", {
+                "duration_seconds": round(perf_counter() - run_started, 3),
+                "error": str(exc),
+            }, level="error")
             raise
+        finally:
+            if image_pool is not None:
+                image_pool.shutdown(wait=False)
+
+    def _event(self, job, source, stage, message, details=None, level="info"):
+        return emit_operation_event(
+            source, stage, message, level=level, job_id=job.id,
+            region_id=job.region_id, period_start=job.period_start,
+            details=details, db=self.db,
+        )
 
     def store_observation(self, observation):
         record = self.db.query(MonthlyFeatureRecord).filter_by(

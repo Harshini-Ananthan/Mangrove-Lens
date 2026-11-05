@@ -33,7 +33,9 @@ export const fetchMonitoringDecisions = async (regionId = 'sundarbans-transbound
   return response.data;
 };
 
-export const runMonitoring = async (periodStart, regionId = 'sundarbans-transboundary-v1', refresh = true) => {
+// Reuse a completed, provenance-bearing Earth Engine analysis when available.
+// New periods still queue a live acquisition; callers may explicitly set refresh=true.
+export const runMonitoring = async (periodStart, regionId = 'sundarbans-transboundary-v1', refresh = false) => {
   const response = await api.post('/monitoring/run', { region_id: regionId, period_start: periodStart, refresh });
   return response.data;
 };

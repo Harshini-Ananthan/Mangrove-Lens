@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from src.database.db import Base
-from src.database.models import MonitoringJobRecord, RiskDecisionRecord
+from src.database.models import MonitoringJobRecord, OperationEventRecord, RiskDecisionRecord
 from src.models.forecast import ForecastModel
 from src.providers.demo import DemoSatelliteProvider
 from src.services.monitoring import MonitoringWorkflow, load_operational_geometry
@@ -34,4 +34,6 @@ def test_workflow_persists_observation_prediction_decision_and_job():
     assert result["prediction"]["model_version"] == "seasonal-persistence-baseline-v1"
     assert db.query(MonitoringJobRecord).filter_by(status="completed").count() == 1
     assert db.query(RiskDecisionRecord).count() == 1
+    stages = {event.stage for event in db.query(OperationEventRecord).all()}
+    assert {"started", "query_completed", "inference_completed", "decision_persisted", "completed"} <= stages
     db.close()

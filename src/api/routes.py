@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
 import json
 import uuid
@@ -7,18 +8,22 @@ import hmac
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from src.database.db import SessionLocal, get_db
-from src.database.models import AlertOutboxRecord, MonthlyFeatureRecord, MonitoringJobRecord, RiskDecisionRecord
+from src.database.models import (
+    AlertOutboxRecord, MonthlyFeatureRecord, MonitoringJobRecord, OperationEventRecord,
+    RiskDecisionRecord,
+)
 from src.models.forecast import ForecastModel
 from src.providers import get_satellite_provider
 from src.services.monitoring import MonitoringWorkflow
 from src.services.notifications import send_channel
+from src.services.operations import emit_operation_event
 from src.services.grid import build_grid
 from src.services.grid import resolve_region_geometry
 from src.providers.earth_engine import EarthEngineProvider
@@ -123,15 +128,41 @@ def run_monitoring(
         MonitoringJobRecord.requested_at.desc()
     ).first()
     if existing and not request.refresh:
-        return {"job_id": existing.id, "status": existing.status, "deduplicated": True}
+        feature = db.query(MonthlyFeatureRecord).filter_by(
+            region_id=request.region_id, period_start=period, provider=provider.name
+        ).one_or_none()
+        emit_operation_event(
+            "api", "verified_data_reused",
+            "Using persisted results from a completed live satellite analysis",
+            job_id=existing.id, region_id=request.region_id, period_start=period,
+            details={
+                "provider": provider.name,
+                "quality_status": feature.quality_status if feature else None,
+                "query_executed_at": (feature.provenance or {}).get("query_executed_at") if feature else None,
+                "reason": "interactive speed optimization; no mock or synthetic substitution",
+            },
+            db=db,
+        )
+        return {
+            "job_id": existing.id, "status": existing.status, "deduplicated": True,
+            "data_source": "persisted_live_satellite_observation",
+        }
     job = MonitoringJobRecord(
         id=str(uuid.uuid4()), region_id=request.region_id, period_start=period,
         status="queued", provider=provider.name, checkpoint="created",
     )
     db.add(job)
     db.commit()
+    emit_operation_event(
+        "api", "job_queued", "New live monitoring job queued",
+        job_id=job.id, region_id=request.region_id, period_start=period,
+        details={"provider": provider.name, "refresh_requested": request.refresh}, db=db,
+    )
     background_tasks.add_task(_run_monitoring_job, job.id, request.region_id, period)
-    return {"job_id": job.id, "status": "queued", "deduplicated": False}
+    return {
+        "job_id": job.id, "status": "queued", "deduplicated": False,
+        "data_source": "live_satellite_query",
+    }
 
 
 @router.get("/monitoring/features")
@@ -157,6 +188,71 @@ def get_jobs(limit: int = Query(50, ge=1, le=200), db: Session = Depends(get_db)
     return db.query(MonitoringJobRecord).order_by(MonitoringJobRecord.started_at.desc()).limit(
         min(limit, 200)
     ).all()
+
+
+def _operation_event_payload(event: OperationEventRecord) -> dict:
+    return {
+        "id": event.id,
+        "timestamp": event.created_at.isoformat(timespec="milliseconds") + "Z",
+        "source": event.source,
+        "stage": event.stage,
+        "level": event.level,
+        "message": event.message,
+        "job_id": event.job_id,
+        "region_id": event.region_id,
+        "period_start": event.period_start.isoformat() if event.period_start else None,
+        "details": event.details or {},
+    }
+
+
+@router.get("/operations/events")
+def get_operation_events(
+    after_id: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=500),
+    latest: bool = False,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_operator),
+):
+    query = db.query(OperationEventRecord).filter(OperationEventRecord.id > after_id)
+    if latest:
+        rows = list(reversed(query.order_by(OperationEventRecord.id.desc()).limit(limit).all()))
+    else:
+        rows = query.order_by(OperationEventRecord.id.asc()).limit(limit).all()
+    return [_operation_event_payload(row) for row in rows]
+
+
+@router.get("/operations/events/stream")
+def stream_operation_events(
+    after_id: int = Query(0, ge=0), _: None = Depends(require_operator),
+):
+    """Stream persisted operational evidence without controlling the pipeline."""
+
+    async def event_stream():
+        cursor = after_id
+        while True:
+            session = SessionLocal()
+            try:
+                rows = session.query(OperationEventRecord).filter(
+                    OperationEventRecord.id > cursor
+                ).order_by(OperationEventRecord.id.asc()).limit(100).all()
+                payloads = [_operation_event_payload(row) for row in rows]
+            finally:
+                session.close()
+            if payloads:
+                for payload in payloads:
+                    cursor = payload["id"]
+                    yield (
+                        f"id: {cursor}\n"
+                        "event: operation\n"
+                        f"data: {json.dumps(payload, separators=(',', ':'), default=str)}\n\n"
+                    )
+            else:
+                yield f": heartbeat {datetime.datetime.utcnow().isoformat()}Z\n\n"
+            await asyncio.sleep(0.75)
+
+    return StreamingResponse(
+        event_stream(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/alerts/outbox")

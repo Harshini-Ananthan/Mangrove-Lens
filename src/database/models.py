@@ -120,3 +120,20 @@ class AlertOutboxRecord(Base):
     sent_at = Column(DateTime)
     last_error = Column(String)
     created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+
+class OperationEventRecord(Base):
+    """Append-only operational evidence consumed by the live observer console."""
+
+    __tablename__ = "operation_events"
+
+    id = Column(Integer, primary_key=True)
+    source = Column(String, nullable=False, index=True)
+    stage = Column(String, nullable=False, index=True)
+    level = Column(String, nullable=False, default="info", index=True)
+    message = Column(String, nullable=False)
+    job_id = Column(String, nullable=True, index=True)
+    region_id = Column(String, nullable=True)
+    period_start = Column(Date, nullable=True)
+    details = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False, index=True)

@@ -123,6 +123,22 @@ npm run dev
 ```
 - **Web Dashboard URL:** `http://localhost:5173`
 
+### 3. Watch all agents and services live
+
+Open another Command Prompt from the project directory:
+
+```bash
+python scripts/watch_operations.py
+```
+
+This is a read-only observer. It streams persisted activity from the API,
+scheduler, Earth Engine acquisition, data-quality, feature, forecasting,
+risk-decision, reporting, alerting and retraining stages. Closing the console
+does not stop or change the autonomous system. Use `--history 0` to show only
+new events or `--no-color` if ANSI color is unavailable.
+If `API_KEY` is configured on the server, pass `--api-key <key>` or set
+`MANGROVE_LENS_API_KEY` in the console environment.
+
 ## Verified monitoring workflow
 
 The implemented workflow is deliberately deterministic and auditable:

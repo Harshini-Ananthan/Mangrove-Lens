@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone
 from typing import Any
 import urllib.request
@@ -264,8 +265,13 @@ class EarthEngineProvider(SatelliteProvider):
                 "palette": ["8b0000", "d73027", "fdae61", "ffffbf", "a6d96a", "1a9850", "006400"],
             }),
         }
-        result = {}
-        for label, url in requests.items():
+        def download(item):
+            label, url = item
             with urllib.request.urlopen(url, timeout=120) as response:
-                result[label] = response.read()
-        return result
+                return label, response.read()
+
+        # The two independent thumbnails are downloaded concurrently. This does
+        # not alter their Earth Engine source or processing; it only removes
+        # avoidable serial network latency from interactive analysis.
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="ee-thumbnail") as executor:
+            return dict(executor.map(download, requests.items()))
