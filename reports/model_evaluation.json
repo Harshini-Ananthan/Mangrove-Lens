@@ -1,5 +1,5 @@
 {
-  "model_version": "rf-20261104152349-8bf04d2e",
+  "model_version": "rf-20261104171443-8bf04d2e",
   "features": [
     "ndvi_lag_1",
     "ndvi_lag_12",
@@ -11,7 +11,7 @@
     "month"
   ],
   "metrics": {
-    "mae": 0.030555904503969323,
+    "mae": 0.030555904503969295,
     "rmse": 0.04126359718601643,
     "r2": 0.4878529020536051,
     "persistence_mae": 0.04841413500411978,
@@ -19,13 +19,13 @@
     "test_rows": 12,
     "cutoff": "2025-10-01",
     "seasonal_mae": {
-      "dry_pre_monsoon": 0.03747977163312549,
-      "monsoon": 0.032789049592084805,
-      "post_monsoon": 0.01447502515754151
+      "dry_pre_monsoon": 0.03747977163312547,
+      "monsoon": 0.032789049592084764,
+      "post_monsoon": 0.014475025157541474
     },
-    "mean_bias": -0.004123591657659048
+    "mean_bias": -0.004123591657659039
   },
-  "trained_at": "2026-11-04T15:23:49.093315+00:00",
+  "trained_at": "2026-11-04T17:14:43.498759+00:00",
   "target": "current_month_ndvi_from_prior_observations",
   "validation": "last 12 complete observations held out",
   "random_seed": 42,
